@@ -2,6 +2,16 @@
 
 All notable changes to `goassay` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
+## 0.1.1 - 2026-10-23
+
+### Fixed
+
+- `PaymentRequiredError` keeps the server's `hint` (what to do next, for example open an escrow) as `err.hint` and at the end of the message, instead of dropping it.
+
+### Changed
+
+- `vectors/eip155/vouchers.json` has the `backend-cast-golden` case again (Robinhood Chain testnet, cross-checked with foundry cast and the backend's verifier); the Python tests run it.
+
 ## 0.1.0 - 2026-10-22
 
 First public release.

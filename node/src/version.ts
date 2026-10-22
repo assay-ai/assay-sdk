@@ -1,2 +1,2 @@
 /** This package's version, sent in the user agent. */
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
