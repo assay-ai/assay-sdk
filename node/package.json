@@ -1,6 +1,6 @@
 {
   "name": "@goassay-ai/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Call tools through Assay over MCP, with free and paid calls signed by your own key.",
   "license": "MIT",
   "repository": {
@@ -22,10 +22,12 @@
     "./core": {
       "types": "./dist/core/index.d.ts",
       "default": "./dist/core/index.js"
-    }
+    },
+    "./vectors/*": "./vectors/*"
   },
   "files": [
     "dist",
+    "vectors",
     "README.md",
     "LICENSE"
   ],
@@ -39,6 +41,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "node -e \"const fs = require('node:fs'); fs.rmSync('vectors', { recursive: true, force: true }); fs.cpSync('../vectors', 'vectors', { recursive: true })\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",

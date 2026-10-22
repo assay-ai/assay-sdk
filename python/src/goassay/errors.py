@@ -119,9 +119,11 @@ class PaymentError(AssayError):
 
 
 class PaymentRequiredError(PaymentError):
-    def __init__(self, message: str, requirement: Any, *, fix_url: str | None = None) -> None:
-        super().__init__("PAYMENT_REQUIRED", message, fix_url=fix_url)
+    def __init__(self, message: str, requirement: Any, *, fix_url: str | None = None, hint: str | None = None) -> None:
+        super().__init__("PAYMENT_REQUIRED", message if hint is None else f"{message}. {hint}", fix_url=fix_url)
         self.requirement = requirement
+        # The server's hint (what to do next, for example open an escrow), or None. Untrusted text.
+        self.hint = hint
 
 
 class PaymentSchemeUnsupportedError(PaymentError):

@@ -135,9 +135,12 @@ export class PaymentRequiredError extends PaymentError {
   override name = "PaymentRequiredError";
   /** `_meta["x402/paymentRequired"]` as the server sent it. Untrusted. */
   readonly requirement: unknown;
-  constructor(message: string, requirement: unknown, init: AssayErrorInit = {}) {
-    super("PAYMENT_REQUIRED", message, init);
+  /** The server's `hint` (what to do next, for example open an escrow), or `null`. Untrusted text. */
+  readonly hint: string | null;
+  constructor(message: string, requirement: unknown, init: AssayErrorInit = {}, hint: string | null = null) {
+    super("PAYMENT_REQUIRED", hint === null ? message : `${message}. ${hint}`, init);
     this.requirement = requirement;
+    this.hint = hint;
   }
 }
 

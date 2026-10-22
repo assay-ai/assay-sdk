@@ -1,7 +1,7 @@
 import { parseCaip10 } from "./caip.js";
 import { MAX_CLOCK_CORRECTION_SECONDS } from "./clock.js";
 import { getAddress, isAddress } from "./hex.js";
-import type { Confirmation, GuardContext, GuardId, GuardResult, RefusalCode } from "./guard-types.js";
+import type { Confirmation, GuardContext, GuardId, GuardOptions, GuardResult, RefusalCode } from "./guard-types.js";
 
 /** What the SDK tells its caller to do in the G4 payer-changed reason (`{run}` in the vectors). */
 export const RUN = "paidCalls.bind() and open";
@@ -14,8 +14,9 @@ export const RUN = "paidCalls.bind() and open";
  * - Pure: every input is in the context; no I/O, no clock, no state.
  * - Fail closed: a missing, malformed or unexpected value is a refusal, never a pass, and the
  *   function never throws.
- * - G11 (a per-URL paid list) is app-only: the SDK has no such list, so it never runs here and
- *   paid calls go through whatever MCP URL the client was built for (spec section 9).
+ * - G11 (a per-URL paid list) runs only when the caller passes `paidUrlPolicy` (as `assay-mcp`
+ *   does). The `Assay` client has no such list, so paid calls go through whatever MCP URL the
+ *   client was built for (spec section 9).
  * - The guards run in the order G1..G12 and the first refusal is returned, so every
  *   implementation reports the same guard and code for the same context (`vectors/guards.json`).
  *   The G7 confirmation (`confirmAbove`) runs last of all: the user is asked only about a payment
@@ -23,7 +24,23 @@ export const RUN = "paidCalls.bind() and open";
  * - A reason never carries an address, an amount or a URL from the server.
  */
 
+/** The order the `Assay` client runs: G11 needs a per-URL paid list. */
 export const GUARD_ORDER: readonly GuardId[] = ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G12"];
+/** The order with `paidUrlPolicy` given. */
+export const GUARD_ORDER_ALL: readonly GuardId[] = [
+  "G1",
+  "G2",
+  "G3",
+  "G4",
+  "G5",
+  "G6",
+  "G7",
+  "G8",
+  "G9",
+  "G10",
+  "G11",
+  "G12",
+];
 
 /**
  * G1: the oldest forwarded call a requirement may answer. A call may take up to the 120 s request
@@ -220,11 +237,11 @@ function g3(ctx: GuardContext, c: Omit<Checked, "payer">): Refusal | null {
   return null;
 }
 
-function g4(ctx: GuardContext, c: Omit<Checked, "payer">): Refusal | string {
+function g4(ctx: GuardContext, c: Omit<Checked, "payer">, opts: GuardOptions): Refusal | string {
   const payer = requirementAccount(c.req.payer, c.chainId);
   if (payer === null) return refuse("G4", "G4_PAYER_INVALID", "the payer is not a valid account");
   if (ctx.recordedPayer !== null && localAccount(ctx.recordedPayer, c.chainId) !== payer) {
-    return refuse("G4", "G4_PAYER_CHANGED", PAYER_CHANGED_REASON);
+    return refuse("G4", "G4_PAYER_CHANGED", opts.payerChangedReason ?? PAYER_CHANGED_REASON);
   }
   const chain = ctx.chain;
   if (!isPlainObject(chain)) {
@@ -347,6 +364,14 @@ function g10(c: Checked): Refusal | null {
   return null;
 }
 
+function g11(policy: GuardOptions["paidUrlPolicy"]): Refusal | null {
+  if (policy === undefined) return null;
+  const canonicalUrl: unknown = policy?.canonicalUrl;
+  const paidUrls: unknown = policy?.paidUrls;
+  const ok = typeof canonicalUrl === "string" && Array.isArray(paidUrls) && paidUrls.includes(canonicalUrl);
+  return ok ? null : refuse("G11", "G11_URL_NOT_PAID", "paid calls through this server are off");
+}
+
 function g12(c: Checked): Refusal | null {
   const resource = c.req.resource as string;
   let decoded = resource;
@@ -385,7 +410,7 @@ function confirm(ctx: GuardContext, c: Checked, confirmAbove: bigint | null): Re
   return same ? null : refuse("G7", "G7_CONFIRMATION_MISMATCH", "the confirmation was for another payment");
 }
 
-function run(ctx: GuardContext): GuardResult {
+function run(ctx: GuardContext, opts: GuardOptions): GuardResult {
   if (!isPlainObject(ctx)) return refuse("G1", "G1_NOT_A_REQUIREMENT", "there is no payment request");
   const call = g1(ctx);
   if ("ok" in call) return call;
@@ -395,20 +420,30 @@ function run(ctx: GuardContext): GuardResult {
   const base = { req, ...call, ...net };
   const quote = g3(ctx, base);
   if (quote) return quote;
-  const payer = g4(ctx, base);
+  const payer = g4(ctx, base, opts);
   if (typeof payer !== "string") return payer;
   const c: Checked = { ...base, payer };
   const early = g5(ctx, c) ?? g6(ctx, c);
   if (early) return early;
   const caps = g7(ctx, c);
   if ("ok" in caps) return caps;
-  return g8(ctx, c) ?? g9(c) ?? g10(c) ?? g12(c) ?? confirm(ctx, c, caps.confirmAbove) ?? { ok: true };
+  return (
+    g8(ctx, c) ??
+    g9(c) ??
+    g10(c) ??
+    g11(opts.paidUrlPolicy) ??
+    g12(c) ??
+    confirm(ctx, c, caps.confirmAbove) ?? { ok: true }
+  );
 }
 
-/** Runs G1..G12 in order (G11 is app-only), then the G7 confirmation. `{ok: true}` only when all pass; never throws. */
-export function checkAll(ctx: GuardContext): GuardResult {
+/**
+ * Runs G1..G12 in order (G11 only with `opts.paidUrlPolicy`), then the G7 confirmation. `{ok: true}`
+ * only when all pass; never throws.
+ */
+export function checkAll(ctx: GuardContext, opts: GuardOptions = {}): GuardResult {
   try {
-    return run(ctx);
+    return run(ctx, opts);
   } catch {
     // An unexpected shape is a refusal, never a pass. G1 is the guard that owns "not a request".
     return refuse("G1", "G1_NOT_A_REQUIREMENT", "the payment request could not be checked");

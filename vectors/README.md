@@ -20,7 +20,7 @@ A new namespace (for example `solana/`) gets its own folder with the same kinds 
 |---|---|---|
 | `vouchers.json` | section 6 | Rail-B requirements plus `issuedAt` and a `network`, with the expected wire voucher, EIP-712 typed data, domain separator, struct hash, digest and signature |
 | `binding.json` | section 5 | `DelegateBinding` challenges in the server's wire form: valid ones with the typed data to sign, its digest and signature, and invalid ones that must be refused naming a field |
-| `guards.json` | section 9 | The local guards G1 to G12 (G11 app-only): a passing `base` context and cases that change it |
+| `guards.json` | section 9 | The local guards G1 to G12 (G11 with a per-URL paid list only): a passing `base` context and cases that change it |
 | `seq.json` | section 9, G9 | `seq` bounds: `1 <= seq < 2^53` as a canonical decimal string |
 
 ### vouchers.json
@@ -36,7 +36,7 @@ Each case has:
 
 To verify a case: build the voucher from `requirement`, `issuedAt` and `network` (spec section 6), compare it with `wire` and `typedData`, hash it and compare the three hashes, then sign the digest with `testKey.privateKey` and compare with `signature` (secp256k1 signatures with RFC 6979 nonces are deterministic), and recover the signer address from it and compare with `testKey.address`.
 
-Case notes: `placeholder-escrow` uses a second placeholder escrow `0x1111...` (its own `network` entry). `short-timeout-utf8-max-safe-seq` covers a short `maxTimeoutSeconds`, a non-ASCII resource hashed as UTF-8, `seq = 2^53 - 1` and an upper-case `requestHash`.
+Case notes: `backend-cast-golden` reproduces the Assay backend's own voucher vector on Robinhood Chain testnet (`eip155:46630`, the real asset, escrow `0x1111...`); its digest is the value foundry cast computed for it. `placeholder-escrow` uses a second placeholder escrow `0x1111...` (its own `network` entry). `short-timeout-utf8-max-safe-seq` covers a short `maxTimeoutSeconds`, a non-ASCII resource hashed as UTF-8, `seq = 2^53 - 1` and an upper-case `requestHash`.
 
 ### binding.json
 
@@ -51,13 +51,15 @@ Case notes: `placeholder-escrow` uses a second placeholder escrow `0x1111...` (i
 - `seq.json` sets `requirement.seq` in the `base` of `guards.json`. `ok: false` means refused with `G9` / `G9_SEQ`.
 - Conventions: amounts, caps and spend are atomic units as decimal strings (6 decimals); local limits are dollars as decimal strings; times are Unix seconds on the local clock; `resource` length counts Unicode code points; addresses from the server are checksummed CAIP-10, addresses the client holds itself may be bare `0x` addresses in any case.
 - Codes are stable: never rename or reuse one.
-- **G11 is app-only.** Its cases (`guard: "G11"`, and the `canonicalUrl` / `paidUrls` fields of `base`) are for an app that keeps a per-URL paid list, such as the local `assay-mcp` app. The SDKs in this repository have no such list: they ignore those fields and skip the G11 cases, naming the reason. Their expected values stay here for the apps that run them.
+- **G11 needs a per-URL paid list.** Its cases (`guard: "G11"`, and the `canonicalUrl` / `paidUrls` fields of `base`) are for an app that keeps one, such as the local `assay-mcp` app. The `Assay` clients have no such list and ignore those fields. The Node tests run every case through `@goassay-ai/sdk/core` with `paidUrlPolicy` built from those fields, and every other case without it too; the Python tests skip the G11 cases, naming the reason.
 
 ## Placeholders and provenance
 
-The chain id (`31337`), the escrow (`0xE5c0e5C0...`, `0x1111...`) and the asset (`0xA55E7a55...`) in these files are **placeholders**, not a real deployment. A client takes the real chain parameters (chain id, escrow, asset, decimals) from its own deployment config for the environment it runs against, never from the server and never from these files. The placeholder addresses mix letters and digits so that checksum, lower-case and upper-case forms differ, which the guard vectors rely on. `eip155:1` appears in `guards.json` and `binding.json` only as "another chain".
+Apart from `backend-cast-golden` (the testnet chain id and asset, with the placeholder escrow `0x1111...`), the chain id (`31337`), the escrow (`0xE5c0e5C0...`, `0x1111...`) and the asset (`0xA55E7a55...`) in these files are **placeholders**, not a real deployment. A client takes the real chain parameters (chain id, escrow, asset, decimals) from its own deployment config for the environment it runs against, never from the server and never from these files. The placeholder addresses mix letters and digits so that checksum, lower-case and upper-case forms differ, which the guard vectors rely on. `eip155:1` appears in `guards.json` and `binding.json` only as "another chain".
 
-Every digest and signature in `vouchers.json` and `binding.json` was computed with viem and reproduced byte for byte by an independent implementation on eth-account (the Python tests in this repository).
+Every digest and signature in `vouchers.json` and `binding.json` was computed with viem and reproduced byte for byte by an independent implementation on eth-account (the Python tests in this repository). The `backend-cast-golden` digest was also computed with foundry cast and checked by the Assay backend's verifier.
+
+The npm package ships these files: `@goassay-ai/sdk/vectors/eip155/vouchers.json` and so on.
 
 ## Test keys
 

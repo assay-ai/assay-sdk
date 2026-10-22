@@ -1,11 +1,119 @@
 {
-  "description": "Rail-B vouchers: requirement + issuedAt -> wire voucher, EIP-712 typed data (integers as decimal strings), digest, and the test key's signature. Chain id, escrow and asset are placeholders; digests and signatures are computed with viem and reproduced independently with eth-account.",
+  "description": "Rail-B vouchers: requirement + issuedAt -> wire voucher, EIP-712 typed data (integers as decimal strings), digest, and the test key's signature. Digests and signatures are computed with viem and reproduced independently with eth-account; 'backend-cast-golden' is also cross-checked with foundry cast and the Assay backend's verifier.",
   "testKey": {
     "label": "TEST ONLY. The well-known anvil/hardhat default account 0. Public; never fund it or use it for anything real.",
     "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
     "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
   },
   "cases": [
+    {
+      "name": "backend-cast-golden",
+      "note": "Reproduces the backend's own EIP-712 voucher vector (testnet, escrow 0x1111...). Its digest is the value foundry cast computed for it.",
+      "network": {
+        "caip2": "eip155:46630",
+        "escrow": "eip155:46630:0x1111111111111111111111111111111111111111",
+        "asset": "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3",
+        "decimals": 6
+      },
+      "requirement": {
+        "rail": "B",
+        "scheme": "voucher",
+        "network": "eip155:46630",
+        "payer": "eip155:46630:0x3333333333333333333333333333333333333333",
+        "payTo": "eip155:46630:0x1111111111111111111111111111111111111111",
+        "provider": "eip155:46630:0x4444444444444444444444444444444444444444",
+        "providerId": "00000000-0000-4000-8000-000000000001",
+        "amount": {
+          "amount": "1000000",
+          "asset": "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3",
+          "decimals": 6
+        },
+        "resource": "https://api.platform.io/tools/search_web",
+        "requestHash": "sha256:ec849310fdfbd01cd6e67b7485481cd199b3e9a2df2f81011f5961e64b06b869",
+        "seq": "42",
+        "maxTimeoutSeconds": 100,
+        "signers": [
+          "payer",
+          "delegate"
+        ],
+        "delegate": "eip155:46630:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "issuedAt": 1785999800,
+      "wire": {
+        "payer": "eip155:46630:0x3333333333333333333333333333333333333333",
+        "payTo": "eip155:46630:0x1111111111111111111111111111111111111111",
+        "provider": "eip155:46630:0x4444444444444444444444444444444444444444",
+        "amount": {
+          "amount": "1000000",
+          "asset": "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3",
+          "decimals": 6
+        },
+        "resource": "https://api.platform.io/tools/search_web",
+        "requestHash": "sha256:ec849310fdfbd01cd6e67b7485481cd199b3e9a2df2f81011f5961e64b06b869",
+        "seq": "42",
+        "issuedAt": 1785999800,
+        "expiresAt": 1785999900
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 46630,
+          "verifyingContract": "0x1111111111111111111111111111111111111111"
+        },
+        "types": {
+          "Voucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint64"
+            },
+            {
+              "name": "resourceHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "requestHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "seq",
+              "type": "uint64"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "Voucher",
+        "message": {
+          "payer": "0x3333333333333333333333333333333333333333",
+          "provider": "0x4444444444444444444444444444444444444444",
+          "amount": "1000000",
+          "resourceHash": "0x2bff49e6e926b3c1843a35b08926096e074efdef23c6e6ae8d00391783e7dc72",
+          "requestHash": "0xec849310fdfbd01cd6e67b7485481cd199b3e9a2df2f81011f5961e64b06b869",
+          "seq": "42",
+          "issuedAt": "1785999800",
+          "expiresAt": "1785999900"
+        }
+      },
+      "domainSeparator": "0x01a0e125a9160ae7be29f3c876038a6402946b19d2615eb6a7b3c4bdd7a98be3",
+      "structHash": "0x3536ef72ffdce64157b64e42d4869842e074a6c08b0beac06b3409c57d468d61",
+      "digest": "0xb50bc1d1af99579d1bdef9a5531e5a4114abe8c0d6352c4956bb66bc439241e1",
+      "signature": "0xabe191280bd9e5eee849c91f40fd3c972d8c95a2af30aea8767610ff1ab0bdb83a689ce6dac96d63bf26b9bdf72a0c4936bf165a2d79f6611e3800c25647ff701c"
+    },
     {
       "name": "placeholder-escrow",
       "note": "A second placeholder escrow 0x1111..., with payer 0x3333... and provider 0x4444....",

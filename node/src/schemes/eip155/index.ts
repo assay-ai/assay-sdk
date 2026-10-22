@@ -7,7 +7,7 @@ import { eip155ChainId, parseCaip10, parseCaip19Erc20 } from "../../core/caip.js
 import { ChainReader, isUsableRpcUrl } from "../../core/chain.js";
 import { correctedNow } from "../../core/clock.js";
 import { SignerRefusal } from "../../core/errors.js";
-import type { GuardContext, GuardResult, SignedVoucher } from "../../core/guard-types.js";
+import type { GuardContext, GuardOptions, GuardResult, SignedVoucher } from "../../core/guard-types.js";
 import { checkAll, usdToAtomic } from "../../core/guards.js";
 import { getAddress, type Address } from "../../core/hex.js";
 import { isObject, voucherEnvelope } from "../../core/meta.js";
@@ -47,6 +47,33 @@ export interface Limits {
 
 export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({ maxPerCall: "0.50", maxPerDay: "5" });
 
+function networkEntry(id: string, n: Eip155Network, fail: (message: string) => Error): NetworkEntry {
+  const chainId = eip155ChainId(id);
+  const escrow = typeof n?.escrow === "string" ? parseCaip10(n.escrow) : null;
+  const asset = typeof n?.asset === "string" ? parseCaip19Erc20(n.asset) : null;
+  if (chainId === null) throw fail(`networks: ${id} is not a CAIP-2 eip155 chain`);
+  if (n?.chainId !== undefined && n.chainId !== chainId) throw fail(`networks.${id}.chainId is not ${chainId}`);
+  if (!escrow || escrow.chainId !== chainId)
+    throw fail(`networks.${id}.escrow must be a checksummed CAIP-10 account on ${id}`);
+  if (!asset || asset.chainId !== chainId)
+    throw fail(`networks.${id}.asset must be a checksummed CAIP-19 erc20 asset on ${id}`);
+  if (!Number.isInteger(n.decimals) || n.decimals < 0 || n.decimals > 36)
+    throw fail(`networks.${id}.decimals is invalid`);
+  const rpc = n.rpcUrls;
+  if (!Array.isArray(rpc) || rpc.length === 0 || !rpc.every((u) => typeof u === "string" && isUsableRpcUrl(u))) {
+    throw fail(`networks.${id}.rpcUrls must list at least one https RPC URL`);
+  }
+  return Object.freeze({
+    id,
+    chainId,
+    escrow: escrow.address,
+    escrowCaip10: n.escrow,
+    asset: n.asset,
+    decimals: n.decimals,
+    rpc: Object.freeze([...rpc]),
+  });
+}
+
 /**
  * Checks and freezes a network table. `fail` makes the error: a `ConfigError` for the caller's
  * own table, a server error for one the API sent. Non-eip155 entries are skipped.
@@ -57,33 +84,26 @@ export function eip155Networks(
 ): Map<string, NetworkEntry> {
   const out = new Map<string, NetworkEntry>();
   for (const [id, n] of Object.entries(table)) {
-    if (!id.startsWith("eip155:")) continue;
-    const chainId = eip155ChainId(id);
-    const escrow = typeof n?.escrow === "string" ? parseCaip10(n.escrow) : null;
-    const asset = typeof n?.asset === "string" ? parseCaip19Erc20(n.asset) : null;
-    if (chainId === null) throw fail(`networks: ${id} is not a CAIP-2 eip155 chain`);
-    if (n?.chainId !== undefined && n.chainId !== chainId) throw fail(`networks.${id}.chainId is not ${chainId}`);
-    if (!escrow || escrow.chainId !== chainId)
-      throw fail(`networks.${id}.escrow must be a checksummed CAIP-10 account on ${id}`);
-    if (!asset || asset.chainId !== chainId)
-      throw fail(`networks.${id}.asset must be a checksummed CAIP-19 erc20 asset on ${id}`);
-    if (!Number.isInteger(n.decimals) || n.decimals < 0 || n.decimals > 36)
-      throw fail(`networks.${id}.decimals is invalid`);
-    const rpc = n.rpcUrls;
-    if (!Array.isArray(rpc) || rpc.length === 0 || !rpc.every((u) => typeof u === "string" && isUsableRpcUrl(u))) {
-      throw fail(`networks.${id}.rpcUrls must list at least one https RPC URL`);
-    }
+    if (id.startsWith("eip155:")) out.set(id, networkEntry(id, n, fail));
+  }
+  return out;
+}
+
+/**
+ * Like {@link eip155Networks}, entry by entry: an entry `skip` returns true for (for example one
+ * whose escrow is still a placeholder) is left out instead of failing the whole table. Every other
+ * eip155 entry must be valid, or this throws a `ConfigError` naming it.
+ */
+export function networkEntriesFrom(
+  table: Record<string, Eip155Network>,
+  options: { skip?: (id: string, network: Eip155Network) => boolean } = {},
+): Map<string, NetworkEntry> {
+  const out = new Map<string, NetworkEntry>();
+  for (const [id, n] of Object.entries(table)) {
+    if (!id.startsWith("eip155:") || options.skip?.(id, n) === true) continue;
     out.set(
       id,
-      Object.freeze({
-        id,
-        chainId,
-        escrow: escrow.address,
-        escrowCaip10: n.escrow,
-        asset: n.asset,
-        decimals: n.decimals,
-        rpc: Object.freeze([...rpc]),
-      }),
+      networkEntry(id, n, (m) => new ConfigError(m)),
     );
   }
   return out;
@@ -114,12 +134,29 @@ export type GuardedVoucher = { ok: true; wire: WireVoucher; typedData: VoucherTy
  * The one path from a requirement to a voucher: the guards and the builder see the same frozen
  * copy, and the network the guards check is the caller's own entry for `requirement.network`.
  * Returns the first refusal, or the voucher to sign.
+ *
+ * `networks` is trusted as given: this function and `buildVoucher` check the requirement against
+ * it, never against the server, so the caller owns the trust root (build it from a pinned table,
+ * for example with `eip155Networks` or `networkEntriesFrom`, never from what an API returned).
+ *
+ * `opts` passes {@link GuardOptions} to the guards; with `signerRefusal: "throw"`, a signer
+ * refusal (a bad `issuedAt`, or a voucher that differs from the checked requirement) is thrown as
+ * a `SignerRefusal` instead of returned as a G1 refusal.
  */
 export function guardAndBuild(
   ctx: Omit<GuardContext, "network">,
   issuedAt: number,
   networks: ReadonlyMap<string, NetworkEntry>,
+  opts: GuardOptions = {},
 ): GuardedVoucher | Exclude<GuardResult, { ok: true }> {
+  const signerRefused = (err: SignerRefusal): Exclude<GuardResult, { ok: true }> => {
+    if (opts.signerRefusal === "throw") throw err;
+    return { ok: false, guard: "G1", code: "G1_NOT_A_REQUIREMENT", reason: err.message };
+  };
+  // Checked before the guards, so a payment the signer would refuse never reaches a prompt.
+  if (!Number.isSafeInteger(issuedAt) || issuedAt <= 0) {
+    return signerRefused(new SignerRefusal("the voucher", "issuedAt", "is not a positive integer"));
+  }
   let requirement: unknown;
   try {
     requirement = deepFreeze(structuredClone(ctx.requirement));
@@ -131,7 +168,7 @@ export function guardAndBuild(
   const network = entry
     ? { id: entry.id, escrow: entry.escrowCaip10, asset: entry.asset, decimals: entry.decimals }
     : null;
-  const result = checkAll({ ...ctx, requirement, network });
+  const result = checkAll({ ...ctx, requirement, network }, opts);
   if (!result.ok) return result;
   const req = requirement as VoucherRequirement;
   try {
@@ -149,17 +186,19 @@ export function guardAndBuild(
       m.provider === getAddress(parseCaip10(req.provider)!.address) &&
       built.typedData.domain.verifyingContract === entry!.escrow &&
       built.typedData.domain.chainId === entry!.chainId;
-    if (!same)
+    if (!same) {
+      if (opts.signerRefusal === "throw")
+        throw new SignerRefusal("the voucher", "message", "differs from the guarded requirement");
       return {
         ok: false,
         guard: "G1",
         code: "G1_NOT_A_REQUIREMENT",
         reason: "the voucher differs from the checked requirement",
       };
+    }
     return { ok: true, ...built };
   } catch (err) {
-    if (err instanceof SignerRefusal)
-      return { ok: false, guard: "G1", code: "G1_NOT_A_REQUIREMENT", reason: err.message };
+    if (err instanceof SignerRefusal) return signerRefused(err);
     throw err;
   }
 }

@@ -140,6 +140,17 @@ function toolError(e: Record<string, unknown>, result: Record<string, unknown>):
   });
 }
 
+/** Characters a hint may not carry: controls, format (bidi, zero-width), surrogates, private use, line/paragraph separators. */
+const UNSAFE_HINT = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/u;
+
+/** The server's `hint` on `assay/error`, without surrounding spaces, when it is a short single-line text (1–500 code points). */
+function hintOf(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const hint = value.replace(/^[ \t]+|[ \t]+$/g, "");
+  const length = [...hint].length;
+  return length > 0 && length <= 500 && !UNSAFE_HINT.test(hint) ? hint : null;
+}
+
 function withKey(err: AssayError, key: string): AssayError {
   err.idempotencyKey ??= key;
   return err;
@@ -247,7 +258,12 @@ export class Tools {
 
     const fixUrl = typeof refusal.fixUrl === "string" ? { fixUrl: refusal.fixUrl } : {};
     if (this.#c.signers.length === 0) {
-      throw new PaymentRequiredError(`${name} is a paid tool and this client has no signer`, requirement, fixUrl);
+      throw new PaymentRequiredError(
+        `${name} is a paid tool and this client has no signer`,
+        requirement,
+        fixUrl,
+        hintOf(refusal.hint),
+      );
     }
     const network = isObject(requirement) && typeof requirement.network === "string" ? requirement.network : "unknown";
     const ns = namespaceOf(network);

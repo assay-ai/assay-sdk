@@ -198,6 +198,32 @@ def test_payment_required_without_signer() -> None:
     assert err.value.fix_url and "enable-paid" in err.value.fix_url
 
 
+def test_payment_required_keeps_the_server_hint_only() -> None:
+    hint = " Add funds to open it, then call again: https://app.example.test/funding"
+
+    def answer(p: Any, s: Any) -> dict[str, Any]:
+        result = payment_required()
+        result["_meta"]["assay/error"].update({"hint": hint, "message": "SECRET server text"})
+        result["content"] = [{"type": "text", "text": "SECRET server text"}]
+        return result
+
+    with pytest.raises(PaymentRequiredError) as err:
+        Fake(mcp=answer).client(with_signer=False).tools.call(TOOL, {})
+    assert err.value.hint == hint.strip()
+    assert str(err.value).endswith(hint.strip()) and "SECRET" not in str(err.value)
+
+    for bad in [7, "", "a\nb", "x" * 501, "a\u2028b", "a\u202eb", "a\u200bb", "a\x85b"]:
+
+        def bad_answer(p: Any, s: Any, bad: Any = bad) -> dict[str, Any]:
+            result = payment_required()
+            result["_meta"]["assay/error"]["hint"] = bad
+            return result
+
+        with pytest.raises(PaymentRequiredError) as err:
+            Fake(mcp=bad_answer).client(with_signer=False).tools.call(TOOL, {})
+        assert err.value.hint is None
+
+
 def test_network_mismatch_names_the_network() -> None:
     network = "solana:placeholder"
     fake = Fake(mcp=lambda p, s: payment_required({**BASE["requirement"], "network": network}))
