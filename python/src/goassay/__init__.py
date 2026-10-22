@@ -1,33 +1,54 @@
-"""The Assay SDK. Pre-release: only the protocol core is here so far."""
+"""The Assay SDK: call tools over MCP, with free calls and paid calls signed by a key you hold."""
 
-from goassay._binding import (
-    DELEGATE_BINDING_DOMAIN_NAME,
-    DELEGATE_BINDING_DOMAIN_VERSION,
-    DELEGATE_BINDING_TYPES,
-    MAX_BINDING_CHALLENGE_SECONDS,
-    binding_typed_data,
+__version__ = "0.0.0"
+
+from goassay import errors  # noqa: E402
+from goassay._client import (  # noqa: E402
+    DEFAULT_API_URL,
+    DEFAULT_MCP_URL,
+    Assay,
+    AsyncAssay,
 )
-from goassay._errors import SignerRefusal
-from goassay._voucher import (
-    VOUCHER_DOMAIN_NAME,
-    VOUCHER_DOMAIN_VERSION,
-    VOUCHER_LIFETIME_SECONDS,
-    VOUCHER_TYPES,
-    BuiltVoucher,
-    build_voucher,
+from goassay._paid_calls import PaidCallsStatus  # noqa: E402
+from goassay._tools import SearchResult, ToolResult  # noqa: E402
+from goassay.errors import (  # noqa: E402
+    AssayError,
+    AuthError,
+    ConfigError,
+    NetworkError,
+    PaymentError,
+    PaymentRefusedError,
+    PaymentRequiredError,
+    PaymentSchemeUnsupportedError,
+    RateLimitError,
+    ScopeMissingError,
+    ServerError,
+    TimeoutError,
 )
+from goassay.signers import EvmSigner, Signer, evm_signer  # noqa: E402
 
 __all__ = [
-    "DELEGATE_BINDING_DOMAIN_NAME",
-    "DELEGATE_BINDING_DOMAIN_VERSION",
-    "DELEGATE_BINDING_TYPES",
-    "MAX_BINDING_CHALLENGE_SECONDS",
-    "VOUCHER_DOMAIN_NAME",
-    "VOUCHER_DOMAIN_VERSION",
-    "VOUCHER_LIFETIME_SECONDS",
-    "VOUCHER_TYPES",
-    "BuiltVoucher",
-    "SignerRefusal",
-    "binding_typed_data",
-    "build_voucher",
+    "DEFAULT_API_URL",
+    "DEFAULT_MCP_URL",
+    "Assay",
+    "AssayError",
+    "AsyncAssay",
+    "AuthError",
+    "ConfigError",
+    "EvmSigner",
+    "NetworkError",
+    "PaidCallsStatus",
+    "PaymentError",
+    "PaymentRefusedError",
+    "PaymentRequiredError",
+    "PaymentSchemeUnsupportedError",
+    "RateLimitError",
+    "ScopeMissingError",
+    "SearchResult",
+    "ServerError",
+    "Signer",
+    "TimeoutError",
+    "ToolResult",
+    "errors",
+    "evm_signer",
 ]
