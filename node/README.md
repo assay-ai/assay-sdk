@@ -42,27 +42,76 @@ import { privateKeyToAccount } from "viem/accounts";
 
 const assay = new Assay({
   signer: evmSigner(privateKeyToAccount(process.env.PAYMENT_KEY as `0x${string}`)),
-  // Your own table of payment networks. Paid calls are checked against it, never against the server.
-  networks: {
-    "eip155:<chainId>": {
-      escrow: "eip155:<chainId>:<escrow address>",
-      asset: "eip155:<chainId>/erc20:<token address>",
-      decimals: 6,
-      rpc: ["https://<rpc 1>", "https://<rpc 2>"],
-    },
-  },
-  limits: { maxPerCall: "0.50", maxPerDay: "5" }, // dollars; these are the defaults
+  limits: { maxPerCall: "0.50", maxPerDay: "5" }, // dollars; see "Spend limits"
   onPayment: (p) => BigInt(p.amount.amount) <= 100_000n, // your own rule; false refuses
 });
 
-const res = await assay.tools.call(
-  "weather_forecast",
-  { city: "Lisbon" },
-  { idempotencyKey: `order-${orderId}-weather` },
-);
+const res = await assay.tools.call("weather_forecast", { city: "Lisbon" });
 ```
 
-On a paid tool the server answers `PAYMENT_REQUIRED`. The SDK then checks the requirement with its local guards (G1 to G12, including the chain reads of your key's grant), calls `onPayment`, signs one voucher, and sends the same call again with the same idempotency key. Network retries resend the same request; a voucher is never signed twice for one attempt. Calling again with the same `idempotencyKey` is safe: Assay replays the stored result and does not charge twice.
+On a paid tool the server answers `PAYMENT_REQUIRED`. The SDK then checks the requirement with its local guards (G1 to G12, including the chain reads of your key's grant), calls `onPayment`, signs one voucher, and sends the same call again with the same idempotency key. Network retries resend the same request; a voucher is never signed twice for one logical call, even when you start the same call twice at once.
+
+### Retrying safely
+
+Every call has an idempotency key: yours (`{ idempotencyKey }`) or one the SDK creates. Every error out of `tools.call` carries it as `err.idempotencyKey`. Calling again with that key is safe: Assay replays a call it already served and does not charge twice.
+
+```ts
+try {
+  return await assay.tools.call("weather_forecast", { city: "Lisbon" });
+} catch (e) {
+  if (e instanceof AssayError && e.retryable && e.idempotencyKey) {
+    return await assay.tools.call("weather_forecast", { city: "Lisbon" }, { idempotencyKey: e.idempotencyKey });
+  }
+  throw e;
+}
+```
+
+For work you may redo after a restart, pass your own key (for example `order-${orderId}-weather`).
+
+### Spend limits
+
+With a signer, every voucher is checked against local limits before it is signed:
+
+- **Defaults: $0.50 per call and $5 per rolling 24 hours**, per signing key.
+- Change them with `limits: { maxPerCall, maxPerDay }` (dollars, as strings).
+- The record is in memory, per process: a restart starts again at zero, and worker threads or several processes each have their own. The on-chain caps that the payer set when approving the key bound it across processes.
+
+`onPayment(details)` sees each payment (tool, network, amount, provider, payer, idempotency key) after every check passed and before it is signed. Use it for your own rules, for example an allow-list of providers:
+
+```ts
+const allowed = new Set(["eip155:<chainId>:<provider address>"]);
+const assay = new Assay({ signer, onPayment: (p) => allowed.has(p.provider) });
+```
+
+Answer quickly: the voucher's lifetime (at most 240 s) starts before the hook runs.
+
+### Networks
+
+Payments are checked against a network table the client holds (escrow, asset, decimals and RPC URLs per network), never against what the server says, so a compromised API cannot redirect a payment.
+
+- The SDK ships a built-in table, pinned in the release; an address change ships as a new SDK release. **Production values are not released yet**, so it is empty for now. A paid call or a bind on a network that is in no table is refused with `PaymentNetworkUnknownError`, which names the network.
+- `networks` configures any chain yourself: a test chain, or another deployment together with its own `mcpUrl`, `apiUrl` and `webUrl`. Your entries are merged over the built-in table. A new network is added; an entry for a built-in network replaces it whole, so fields are never mixed from two deployments.
+- `rpcUrls: { "eip155:<chainId>": ["https://your-rpc"] }` replaces only a network's RPC URLs, for example with your private RPC.
+
+Addresses must be checksummed CAIP-10 / CAIP-19 ids on the network's chain. RPC URLs must be https (plain http only to localhost).
+
+```ts
+const assay = new Assay({
+  mcpUrl: "https://mcp.your-deployment.example/",
+  apiUrl: "https://api.your-deployment.example/api/v1",
+  webUrl: "https://portal.your-deployment.example",
+  signer,
+  networks: {
+    "eip155:<chainId>": {
+      // chainId: optional; when given it must be the id in the key
+      escrow: "eip155:<chainId>:<escrow contract address>",
+      asset: "eip155:<chainId>/erc20:<token address>",
+      decimals: 6,
+      rpcUrls: ["https://<rpc 1>", "https://<rpc 2>"],
+    },
+  },
+});
+```
 
 ### Binding the key (once)
 
@@ -77,7 +126,7 @@ if (status.state !== "active") {
 }
 ```
 
-The approval cannot be automated: a person opens the link and compares the fingerprint.
+The approval link is built on the web app's origin (`webUrl`, default `https://portal.goassay.ai`). A link the server sends is used only when it is on that same origin. The key's address travels only in the URL fragment. The approval cannot be automated: a person opens the link and compares the fingerprint.
 
 ## Reading a receipt
 
@@ -104,6 +153,7 @@ try {
 } catch (e) {
   if (e instanceof ScopeMissingError) console.error(`the API key needs the ${e.requiredScope} scope`);
   else if (e instanceof PaymentRequiredError) console.error("paid tool: pass a signer");
+  else if (e instanceof PaymentNetworkUnknownError) console.error(`network ${e.network} is not supported yet`);
   else if (e instanceof PaymentRefusedError) console.error(`refused before signing by ${e.guard}: ${e.code}`);
   else if (e instanceof RateLimitError) console.error(`retry in ${e.retryAfterMs} ms`);
   else if (e instanceof AssayError) console.error(e.code, e.message);

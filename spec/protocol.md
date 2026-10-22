@@ -22,6 +22,7 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 |---|---|
 | MCP endpoint | `https://mcp.goassay.ai/` |
 | REST API | `https://api.goassay.ai/api/v1` |
+| Web app (key approval) | `https://portal.goassay.ai` |
 
 - Every request carries `Authorization: Bearer <API key>`. The API key is created in the Assay web app for one agent.
 - Permissions live on the key as scopes. A request that needs a scope the key does not have is refused with HTTP `403` and error code `AUTH_SCOPE_MISSING`.
@@ -39,7 +40,7 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 - `POST` of one JSON-RPC 2.0 request to the MCP endpoint; `Content-Type: application/json`; `Accept: application/json, text/event-stream`. The answer is one JSON-RPC response. No session and no server-sent events are needed.
 - The client sends the MCP protocol revision it speaks in the `MCP-Protocol-Version` header.
-- The methods a client needs are `tools/list` and `tools/call`.
+- The methods a client needs are `tools/list` and `tools/call`. The meta tools `search_tools` and `get_tool` (find a tool, read its schemas and price) are called through `tools/call`.
 - JSON-RPC error `-32029` means rate limited. Its `data` carries `code: "RATE_LIMITED"` and MAY carry `retryAfterMs`.
 
 ### 2.2 REST envelope
@@ -163,7 +164,7 @@ A person approves the bound key in the Assay web app, at:
 {web origin}/agents/enable-paid?credential=<credential id>#key=<checksummed address>
 ```
 
-The address travels only in the URL fragment. The page shows the key's **fingerprint**, which the person compares with the one the client shows: the last 8 hex digits of the address, upper case, in two groups of 4 (for example `1A2B 9F3C`). The approval cannot be automated.
+`{web origin}` is the web app origin the client is configured with. A client builds this link itself; it MAY use a link the server sends only when that link is on the same origin and names the same credential. The address travels only in the URL fragment. The page shows the key's **fingerprint**, which the person compares with the one the client shows: the last 8 hex digits of the address, upper case, in two groups of 4 (for example `1A2B 9F3C`). The approval cannot be automated.
 
 ## 6. The voucher
 
@@ -177,7 +178,13 @@ chainId           = the chain id of requirement.network
 verifyingContract = the address of requirement.payTo (the escrow)
 ```
 
-The client MUST take the chain id, escrow and asset from its own built-in table for the environment, never from the server, and MUST refuse a requirement whose `payTo`, `amount.asset` or `amount.decimals` differ from that table.
+The client MUST take the chain id, escrow and asset from its own network table, never from the server, and MUST refuse a requirement whose `network` is not in that table or whose `payTo`, `amount.asset` or `amount.decimals` differ from it.
+
+The network table is held by the client:
+
+- the reference SDKs ship a built-in table pinned in each release (production values are published with a later release; until then it is empty and every paid call is refused);
+- the caller can configure further networks in code, for a test chain or another deployment. A configured entry for a network the built-in table has replaces that entry whole, so escrow and asset never come from two deployments;
+- the caller can replace only a network's RPC URLs.
 
 ### 6.2 Struct
 
@@ -255,6 +262,8 @@ A server can therefore move the client's clock by at most 120 seconds either way
 
 - `assay/idempotency-key` is a string of 1 to 128 printable ASCII characters (`0x20` to `0x7E`). Anything else is refused with `MCP_IDEMPOTENCY_KEY_INVALID` before the call runs.
 - One key names one **logical** call. The client either uses the key its caller supplied, or creates one UUIDv4 per logical call. It sends that same key on the unsigned attempt, the signed retry and every network retry.
+- A client runs at most one call per key at a time: a second call with a key whose call is still running waits for it (or is refused when its tool or arguments differ), so it never signs a second voucher for one logical call.
+- A client gives the key back to its caller on failure too (the reference SDKs put it on every error), so the caller can retry the same logical call safely.
 - Without a key, every request is a new call. The server never derives a key from the arguments.
 - The key is scoped to the agent and bound to the tool and the arguments. The same key with another tool or other arguments is refused with `IDEMPOTENCY_KEY_REUSED`, and nothing is charged.
 - **Replay.** A key whose call returned a result answers with the stored result, marked `_meta["assay/replayed"] = true`, and charges nothing again. The receipt status is read again and can have moved on. Results are kept for 900 seconds by default (at most 3,600).
@@ -270,7 +279,7 @@ Before it signs, a client checks the requirement locally. The reference implemen
 | Guard | Checks |
 |---|---|
 | G1 | The requirement is a rail-B voucher requirement and answers a tool call this client sent at most 120 s ago |
-| G2 | `network`, `payTo` (escrow), `amount.asset` and `amount.decimals` equal the client's built-in table; `amount` is a positive uint64 |
+| G2 | `network`, `payTo` (escrow), `amount.asset` and `amount.decimals` equal the client's network table (section 6.1); `amount` is a positive uint64 |
 | G3 | A price quote (`assay/price.maxAmount`) for the tool exists, in the same asset, and the amount is not above it |
 | G4 | A chain read of the payment key's grant, at most 600 s old: the grant is for this key, from this payer, active and not expired. A change of payer is refused |
 | G5 | The requirement accepts a `"delegate"` signer, names this client's key as `delegate`, and the key is not the payer |
