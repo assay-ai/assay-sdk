@@ -212,7 +212,7 @@ def test_payment_required_keeps_the_server_hint_only() -> None:
     assert err.value.hint == hint.strip()
     assert str(err.value).endswith(hint.strip()) and "SECRET" not in str(err.value)
 
-    for bad in [7, "", "a\nb", "x" * 501]:
+    for bad in [7, "", "a\nb", "x" * 501, "a\u2028b", "a\u202eb", "a\u200bb", "a\x85b"]:
 
         def bad_answer(p: Any, s: Any, bad: Any = bad) -> dict[str, Any]:
             result = payment_required()

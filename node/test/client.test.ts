@@ -248,7 +248,7 @@ describe("paid call", () => {
     expect(err.hint).toBe(hint.trim());
     expect(err.message.endsWith(hint.trim())).toBe(true);
     expect(err.message).not.toContain("SECRET");
-    for (const bad of [7, "", "a\nb", "x".repeat(501)]) {
+    for (const bad of [7, "", "a\nb", "x".repeat(501), "a\u2028b", "a\u202Eb", "a\u200Bb", "a\u0085b", "a\uD800b"]) {
       const e = (await fakeClient({ signer: false, mcp: answer(bad) })
         .client.tools.call(TOOL, {})
         .catch((x: unknown) => x)) as PaymentRequiredError;

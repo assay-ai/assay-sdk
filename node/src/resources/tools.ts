@@ -140,12 +140,15 @@ function toolError(e: Record<string, unknown>, result: Record<string, unknown>):
   });
 }
 
-/** The server's `hint` on `assay/error`, trimmed, when it is a short single-line text. */
+/** Characters a hint may not carry: controls, format (bidi, zero-width), surrogates, private use, line/paragraph separators. */
+const UNSAFE_HINT = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/u;
+
+/** The server's `hint` on `assay/error`, without surrounding spaces, when it is a short single-line text (1–500 code points). */
 function hintOf(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const hint = value.trim();
-  const printable = [...hint].every((ch) => ch >= " " && ch !== "\x7f");
-  return hint.length > 0 && hint.length <= 500 && printable ? hint : null;
+  const hint = value.replace(/^[ \t]+|[ \t]+$/g, "");
+  const length = [...hint].length;
+  return length > 0 && length <= 500 && !UNSAFE_HINT.test(hint) ? hint : null;
 }
 
 function withKey(err: AssayError, key: string): AssayError {

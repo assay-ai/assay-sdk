@@ -366,7 +366,8 @@ function g10(c: Checked): Refusal | null {
 
 function g11(policy: GuardOptions["paidUrlPolicy"]): Refusal | null {
   if (policy === undefined) return null;
-  const { canonicalUrl, paidUrls } = policy;
+  const canonicalUrl: unknown = policy?.canonicalUrl;
+  const paidUrls: unknown = policy?.paidUrls;
   const ok = typeof canonicalUrl === "string" && Array.isArray(paidUrls) && paidUrls.includes(canonicalUrl);
   return ok ? null : refuse("G11", "G11_URL_NOT_PAID", "paid calls through this server are off");
 }

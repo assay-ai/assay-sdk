@@ -7,6 +7,7 @@ import concurrent.futures
 import json
 import math
 import threading
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -83,12 +84,18 @@ class ToolList:
     names this URL does not serve)."""
 
 
+_UNSAFE_HINT = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
+"""Characters a hint may not carry: controls, format (bidi, zero-width), surrogates, private use,
+line/paragraph separators."""
+
+
 def _hint_of(value: object) -> str | None:
-    """The server's `hint` on `assay/error`, trimmed, when it is a short single-line text."""
+    """The server's `hint` on `assay/error`, without surrounding spaces, when it is a short
+    single-line text (1-500 code points)."""
     if not isinstance(value, str):
         return None
-    hint = value.strip()
-    ok = 0 < len(hint) <= 500 and not any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in hint)
+    hint = value.strip(" \t")
+    ok = 0 < len(hint) <= 500 and not any(unicodedata.category(ch) in _UNSAFE_HINT for ch in hint)
     return hint if ok else None
 
 
