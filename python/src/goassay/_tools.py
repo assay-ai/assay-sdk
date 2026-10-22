@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
+import json
 import math
+import threading
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from goassay import _ops
 from goassay._caip import namespace_of
@@ -30,10 +34,14 @@ from goassay._meta import (
     structured_of,
 )
 from goassay._ops import Flow
+
+if TYPE_CHECKING:
+    from goassay._client import Assay, AsyncAssay
 from goassay.errors import (
     AssayError,
     ConfigError,
     PaymentError,
+    PaymentNetworkUnknownError,
     PaymentRefusedError,
     PaymentRequiredError,
     PaymentSchemeUnsupportedError,
@@ -117,7 +125,8 @@ def _send(c: Context, params: dict[str, Any]) -> Flow[dict[str, Any]]:
     while True:
         result = yield from c.mcp("tools/call", params)
         e = _assay_error(result)
-        if e is None or e.get("code") != IN_PROGRESS_CODE or attempt >= c.max_retries:
+        # The first attempt still runs, or a refusal-rate limit: wait and send the same bytes again.
+        if e is None or e.get("code") not in (IN_PROGRESS_CODE, "RATE_LIMITED") or attempt >= c.max_retries:
             return result
         if isinstance(e.get("retryAfterMs"), (int, float)):
             wait = e["retryAfterMs"] / 1000
@@ -179,7 +188,17 @@ def quote_for(c: Context, tool: str) -> Flow[dict[str, str] | None]:
     return c.quotes.get(tool) if info.get("name") == tool else None
 
 
-def call(c: Context, name: str, args: dict[str, Any], idempotency_key: str | None) -> Flow[ToolResult]:
+def call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> Flow[ToolResult]:
+    """``_call``, with the call's idempotency key put on any ``AssayError`` it raises."""
+    try:
+        return (yield from _call(c, name, args, idempotency_key))
+    except AssayError as err:
+        if err.idempotency_key is None:
+            err.idempotency_key = idempotency_key
+        raise
+
+
+def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> Flow[ToolResult]:
     """Calls a tool. A paid tool's ``PAYMENT_REQUIRED`` is checked by every local guard, offered
     to ``on_payment``, signed once, and the same call is sent again with the voucher and the same
     idempotency key. Network retries resend the same request; nothing is signed twice."""
@@ -187,7 +206,7 @@ def call(c: Context, name: str, args: dict[str, Any], idempotency_key: str | Non
         raise ConfigError("name is not a tool name")
     if not isinstance(args, dict):
         raise ConfigError("arguments must be a dict")
-    key = idempotency_key if idempotency_key is not None else str(uuid.uuid4())
+    key = idempotency_key
     if not is_idempotency_key(key):
         raise ConfigError("idempotency_key must be 1 to 128 printable ASCII characters")
     params: dict[str, Any] = {"name": name, "arguments": args, "_meta": {IDEMPOTENCY_META: key}}
@@ -219,6 +238,8 @@ def call(c: Context, name: str, args: dict[str, Any], idempotency_key: str | Non
         requirement=requirement, tool=tool, called_at=called_at, signer=signer, idempotency_key=key
     )
     if isinstance(prepared, GuardResult):
+        if prepared.code == "G2_NETWORK":
+            raise PaymentNetworkUnknownError(network)
         raise PaymentRefusedError(
             prepared.guard or "G1", prepared.code or "G1_NOT_A_REQUIREMENT", prepared.reason or "", fix_url=fix_url
         )
@@ -245,3 +266,118 @@ def call(c: Context, name: str, args: dict[str, Any], idempotency_key: str | Non
         return _to_result(paid, key)
     scheme.on_refused(str(after["code"]), requirement, signer)
     raise _tool_error(after, paid)
+
+
+# --- the sync and async faces ---------------------------------------------------------------
+
+
+def _fingerprint(name: str, args: dict[str, Any]) -> str:
+    return json.dumps([name, args], sort_keys=True, default=str)
+
+
+def _reused(key: str) -> AssayError:
+    err = AssayError("IDEMPOTENCY_KEY_REUSED", "this idempotency key is in use for another call")
+    err.idempotency_key = key
+    return err
+
+
+class Tools:
+    """Tools over MCP. One logical call per idempotency key in a client: a second call with a key
+    while the first runs (another thread) waits for it, so at most one voucher is signed for it."""
+
+    def __init__(self, client: Assay) -> None:
+        self._c = client
+        self._lock = threading.Lock()
+        self._in_flight: dict[str, tuple[str, concurrent.futures.Future[ToolResult]]] = {}
+
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        category: str | None = None,
+        detail: str | None = None,
+        cursor: str | None = None,
+    ) -> SearchResult:
+        """``search_tools``: tools this URL can run, by what they do. Free."""
+        opts = {"limit": limit, "category": category, "detail": detail, "cursor": cursor}
+        return self._c._run(search(self._c._ctx, query, opts))
+
+    def get(self, name: str) -> dict[str, Any]:
+        """``get_tool``: one tool's description, schemas, price and version. Free."""
+        return self._c._run(get(self._c._ctx, name))
+
+    def call(
+        self, name: str, arguments: dict[str, Any] | None = None, *, idempotency_key: str | None = None
+    ) -> ToolResult:
+        """Calls a tool; a paid tool is checked, signed once and retried with the same key. Any
+        ``AssayError`` it raises carries ``idempotency_key``: pass it again to retry safely."""
+        args = arguments or {}
+        key = idempotency_key if idempotency_key is not None else str(uuid.uuid4())
+        fp = _fingerprint(name, args)
+        with self._lock:
+            running = self._in_flight.get(key)
+            if running is None:
+                future: concurrent.futures.Future[ToolResult] = concurrent.futures.Future()
+                self._in_flight[key] = (fp, future)
+        if running is not None:
+            if running[0] != fp:
+                raise _reused(key)
+            return running[1].result()
+        try:
+            result = self._c._run(call(self._c._ctx, name, args, key))
+        except BaseException as err:
+            future.set_exception(err)
+            raise
+        else:
+            future.set_result(result)
+            return result
+        finally:
+            with self._lock:
+                self._in_flight.pop(key, None)
+
+
+class AsyncTools:
+    def __init__(self, client: AsyncAssay) -> None:
+        self._c = client
+        self._in_flight: dict[str, tuple[str, asyncio.Future[ToolResult]]] = {}
+
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        category: str | None = None,
+        detail: str | None = None,
+        cursor: str | None = None,
+    ) -> SearchResult:
+        opts = {"limit": limit, "category": category, "detail": detail, "cursor": cursor}
+        return await self._c._run(search(self._c._ctx, query, opts))
+
+    async def get(self, name: str) -> dict[str, Any]:
+        return await self._c._run(get(self._c._ctx, name))
+
+    async def call(
+        self, name: str, arguments: dict[str, Any] | None = None, *, idempotency_key: str | None = None
+    ) -> ToolResult:
+        args = arguments or {}
+        key = idempotency_key if idempotency_key is not None else str(uuid.uuid4())
+        fp = _fingerprint(name, args)
+        running = self._in_flight.get(key)
+        if running is not None:
+            if running[0] != fp:
+                raise _reused(key)
+            return await asyncio.shield(running[1])
+        future: asyncio.Future[ToolResult] = asyncio.get_running_loop().create_future()
+        self._in_flight[key] = (fp, future)
+        try:
+            result = await self._c._run(call(self._c._ctx, name, args, key))
+        except BaseException as err:
+            future.set_exception(err)
+            future.exception()  # marks it retrieved when nobody else waits
+            raise
+        else:
+            future.set_result(result)
+            return result
+        finally:
+            self._in_flight.pop(key, None)

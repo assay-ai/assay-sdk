@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
-from typing import Any, Literal
-from urllib.parse import parse_qs, urlsplit, urlunsplit
+from typing import TYPE_CHECKING, Any, Literal
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from eth_utils.address import to_checksum_address
 
@@ -15,10 +15,13 @@ from goassay._context import Context
 from goassay._eip155 import bind_evm_key
 from goassay._meta import fingerprint
 from goassay._ops import Flow
-from goassay.errors import AssayError, ConfigError, ServerError
+from goassay.errors import AssayError, ConfigError, PaymentNetworkUnknownError, ServerError
 from goassay.signers import EvmSigner
 
-PaidCallsState = Literal["unbound", "pending_approval", "active", "expired", "bound_to_other_key"]
+if TYPE_CHECKING:
+    from goassay._client import Assay, AsyncAssay
+
+PaidCallsState = Literal["unbound", "pending_approval", "active", "expired", "bound_to_other_key", "unknown"]
 _UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 _LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 
@@ -26,7 +29,8 @@ _LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 @dataclass(frozen=True)
 class PaidCallsStatus:
     state: PaidCallsState
-    """``unbound``, ``pending_approval``, ``active``, ``expired`` or ``bound_to_other_key``."""
+    """``unbound``, ``pending_approval``, ``active``, ``expired``, ``bound_to_other_key``, or
+    ``unknown`` (Assay could not read the key's grant from the chain just now; ask again)."""
     credential_id: str
     delegate: str | None
     """The bound key's ``0x`` address."""
@@ -34,7 +38,8 @@ class PaidCallsStatus:
     caps: dict[str, str | None] | None
     """On-chain caps of the bound key in atomic units, when the server read them."""
     approval_url: str | None
-    """Where a person approves this client's key, from the server; ``None`` when it sent none."""
+    """Where a person approves this client's key: ``{web_url}/agents/enable-paid?credential=...#key=...``.
+    The key travels only in the fragment. ``None`` without a signer."""
     fingerprint: str | None
     """This client's key as the approval page shows it (``1A2B 9F3C``)."""
     already_bound: bool = False
@@ -46,18 +51,27 @@ def _address(caip10: object) -> str | None:
     return p[1] if p else None
 
 
-def _approval_link(raw: object, credential_id: str, address: str | None) -> str | None:
-    """The server's link with this key in the fragment (never sent to a server), or ``None``."""
-    if not isinstance(raw, str) or address is None:
+def approval_link(web_origin: str, server: object, credential_id: str, address: str | None) -> str | None:
+    """The approval link, with this key only in the fragment (browsers never send it to a server).
+
+    A link the server sent is used only when it is on the configured web origin and names this
+    credential; otherwise the link is built from the web origin.
+    """
+    if address is None:
         return None
-    try:
-        u = urlsplit(raw)
-    except ValueError:
-        return None
-    ok_scheme = u.scheme == "https" or (u.scheme == "http" and (u.hostname or "") in _LOOPBACK)
-    if not ok_scheme or u.username or u.password or parse_qs(u.query).get("credential") != [credential_id]:
-        return None
-    return urlunsplit((u.scheme, u.netloc, u.path, u.query, f"key={address}"))
+    base: tuple[str, str, str, str] | None = None
+    if isinstance(server, str):
+        try:
+            u = urlsplit(server)
+            same_origin = f"{u.scheme}://{u.netloc}" == web_origin and "@" not in u.netloc
+            if same_origin and parse_qs(u.query).get("credential") == [credential_id]:
+                base = (u.scheme, u.netloc, u.path, u.query)
+        except ValueError:
+            base = None
+    if base is None:
+        w = urlsplit(web_origin)
+        base = (w.scheme, w.netloc, "/agents/enable-paid", urlencode({"credential": credential_id}))
+    return urlunsplit((*base, f"key={address}"))
 
 
 def _signer(c: Context) -> EvmSigner | None:
@@ -77,7 +91,9 @@ def status(c: Context) -> Flow[PaidCallsStatus]:
     delegate, pending = _address(data.get("delegate")), _address(data.get("pendingDelegate"))
     paid = data.get("paidCalls") if isinstance(data.get("paidCalls"), dict) else None
     state: PaidCallsState
-    if mine is not None and pending == mine:
+    if data.get("paidCallsUnknown") is True and delegate is not None and mine in (None, delegate):
+        state = "unknown"
+    elif mine is not None and pending == mine:
         state = "pending_approval"
     elif delegate is None:
         state = "unbound"
@@ -104,7 +120,7 @@ def status(c: Context) -> Flow[PaidCallsStatus]:
         delegate=delegate,
         pending_delegate=pending,
         caps=caps,
-        approval_url=_approval_link(data.get("approvalUrl"), data["credentialId"], mine),
+        approval_url=approval_link(c.web_origin, data.get("approvalUrl"), data["credentialId"], mine),
         fingerprint=fingerprint(mine) if mine else None,
     )
 
@@ -119,15 +135,16 @@ def bind(c: Context, network: str | None) -> Flow[PaidCallsStatus]:
         return replace(current, already_bound=True)
     evm = [n for n in c.networks if n.startswith("eip155:")]
     nid = network if network is not None else (evm[0] if len(evm) == 1 else None)
-    chain_id = eip155_chain_id(nid) if nid is not None else None
-    if chain_id is None or nid not in c.networks:
-        raise ConfigError("bind() needs one eip155 network in `networks`, or `network` naming one of them")
-    answer = yield from bind_evm_key(
+    chain_id = eip155_chain_id(nid) if nid is not None and nid in c.networks else None
+    if chain_id is None:
+        if nid is None and len(evm) > 1:
+            raise ConfigError("bind() needs `network` naming one of the eip155 networks")
+        raise PaymentNetworkUnknownError(nid or "eip155")
+    yield from bind_evm_key(
         signer=signer, chain_id=chain_id, credential_id=current.credential_id, rest=c.rest, now=c.now
     )
     after = yield from status(c)
-    url = after.approval_url or _approval_link(answer.get("approvalUrl"), after.credential_id, mine)
-    return replace(after, approval_url=url)
+    return after
 
 
 def wait_until_active(c: Context, timeout: float) -> Flow[PaidCallsStatus]:
@@ -146,3 +163,35 @@ def wait_until_active(c: Context, timeout: float) -> Flow[PaidCallsStatus]:
         if now >= until:
             raise AssayError("WAIT_TIMEOUT", "paid calls were not approved in time", retryable=True)
         yield from _ops.sleep(min(until - now, 5.0 if now - started < 120 else 15.0))
+
+
+class PaidCalls:
+    def __init__(self, client: Assay) -> None:
+        self._c = client
+
+    def status(self) -> PaidCallsStatus:
+        """Where paid calls stand for this API key and this client's signer."""
+        return self._c._run(status(self._c._ctx))
+
+    def bind(self, *, network: str | None = None) -> PaidCallsStatus:
+        """Binds this client's EVM signer to the API key; a no-op when it is bound already.
+        A person then approves the key at ``approval_url``, comparing the fingerprint."""
+        return self._c._run(bind(self._c._ctx, network))
+
+    def wait_until_active(self, *, timeout: float = 900.0) -> PaidCallsStatus:
+        """Polls until a person approved the key, for up to ``timeout`` seconds."""
+        return self._c._run(wait_until_active(self._c._ctx, timeout))
+
+
+class AsyncPaidCalls:
+    def __init__(self, client: AsyncAssay) -> None:
+        self._c = client
+
+    async def status(self) -> PaidCallsStatus:
+        return await self._c._run(status(self._c._ctx))
+
+    async def bind(self, *, network: str | None = None) -> PaidCallsStatus:
+        return await self._c._run(bind(self._c._ctx, network))
+
+    async def wait_until_active(self, *, timeout: float = 900.0) -> PaidCallsStatus:
+        return await self._c._run(wait_until_active(self._c._ctx, timeout))

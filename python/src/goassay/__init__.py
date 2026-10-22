@@ -6,9 +6,11 @@ from goassay import errors  # noqa: E402
 from goassay._client import (  # noqa: E402
     DEFAULT_API_URL,
     DEFAULT_MCP_URL,
+    DEFAULT_WEB_URL,
     Assay,
     AsyncAssay,
 )
+from goassay._networks import BUILT_IN_NETWORKS  # noqa: E402
 from goassay._paid_calls import PaidCallsStatus  # noqa: E402
 from goassay._tools import SearchResult, ToolResult  # noqa: E402
 from goassay.errors import (  # noqa: E402
@@ -17,6 +19,7 @@ from goassay.errors import (  # noqa: E402
     ConfigError,
     NetworkError,
     PaymentError,
+    PaymentNetworkUnknownError,
     PaymentRefusedError,
     PaymentRequiredError,
     PaymentSchemeUnsupportedError,
@@ -28,8 +31,10 @@ from goassay.errors import (  # noqa: E402
 from goassay.signers import EvmSigner, Signer, evm_signer  # noqa: E402
 
 __all__ = [
+    "BUILT_IN_NETWORKS",
     "DEFAULT_API_URL",
     "DEFAULT_MCP_URL",
+    "DEFAULT_WEB_URL",
     "Assay",
     "AssayError",
     "AsyncAssay",
@@ -39,6 +44,7 @@ __all__ = [
     "NetworkError",
     "PaidCallsStatus",
     "PaymentError",
+    "PaymentNetworkUnknownError",
     "PaymentRefusedError",
     "PaymentRequiredError",
     "PaymentSchemeUnsupportedError",

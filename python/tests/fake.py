@@ -31,13 +31,14 @@ NOW = float(BASE["nowSeconds"])
 MCP = "https://mcp.example.test/"
 API = "https://api.example.test/api/v1"
 RPC = "https://rpc.example.test/"
+WEB = "https://app.example.test"
 TOOL = "weather_forecast"
 NETWORKS = {
     BASE["network"]["id"]: {
         "escrow": BASE["network"]["escrow"],
         "asset": BASE["network"]["asset"],
         "decimals": BASE["network"]["decimals"],
-        "rpc": [RPC],
+        "rpcUrls": [RPC],
     }
 }
 
@@ -139,7 +140,7 @@ class Fake:
         def respond(a: Answer) -> httpx.Response:
             return httpx.Response(a.status, json=a.body, headers={"date": date, **a.headers})
 
-        if seen.url == RPC:
+        if seen.url.startswith("https://rpc"):
             return respond(Answer(_rpc(body)))
         if seen.url == MCP:
             out = self.mcp(body["params"], seen) if self.mcp else {}
@@ -154,16 +155,18 @@ class Fake:
     def calls(self) -> list[Seen]:
         return [s for s in self.seen if s.url == MCP and s.body["params"]["name"] == TOOL]
 
-    def client(self, *, with_signer: bool = True, **options: Any) -> Assay:
+    def client(self, *, with_signer: bool = True, pinned: bool = True, **options: Any) -> Assay:
         kw: dict[str, Any] = {
             "api_key": "test-api-key-123",
             "mcp_url": MCP,
             "api_url": API,
+            "web_url": WEB,
             "http_client": httpx.Client(transport=httpx.MockTransport(self.handle)),
             "sleep": self.sleeps.append,
             "now": lambda: NOW,
-            "networks": NETWORKS,
         }
+        if pinned:
+            kw["networks"] = NETWORKS
         if with_signer:
             kw["signer"] = self.signer
         kw.update(options)
@@ -177,6 +180,7 @@ class Fake:
             "api_key": "test-api-key-123",
             "mcp_url": MCP,
             "api_url": API,
+            "web_url": WEB,
             "http_client": httpx.AsyncClient(transport=httpx.MockTransport(self.handle)),
             "sleep": sleep,
             "now": lambda: NOW,

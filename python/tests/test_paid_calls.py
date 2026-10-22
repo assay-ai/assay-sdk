@@ -9,7 +9,7 @@ from eth_account.messages import encode_typed_data
 from goassay import AssayError, ConfigError
 from goassay._binding import check_binding_challenge
 from goassay.signers import full_message
-from tests.fake import ACCOUNT, BINDING, NOW, Answer, Fake, Seen
+from tests.fake import ACCOUNT, BINDING, NOW, WEB, Answer, Fake, Seen
 
 CTX = BINDING["context"]
 CREDENTIAL = CTX["credentialId"]
@@ -93,13 +93,21 @@ def test_bind_is_noop_when_bound() -> None:
     assert fake.signer.calls == 1
 
 
-def test_no_approval_url_without_server_link() -> None:
-    assert Fake(api=delegate_api(2, None)).client().paid_calls.bind().approval_url is None
+BUILT = f"{WEB}/agents/enable-paid?credential={CREDENTIAL}#key={ACCOUNT.address}"
 
 
-def test_link_for_another_credential_is_dropped() -> None:
-    api = delegate_api(2, "https://app.example.test/agents/enable-paid?credential=other")
-    assert Fake(api=api).client().paid_calls.status().approval_url is None
+def test_approval_url_built_from_web_url_without_server_link() -> None:
+    assert Fake(api=delegate_api(2, None)).client().paid_calls.bind().approval_url == BUILT
+
+
+def test_server_link_for_another_credential_is_not_used() -> None:
+    api = delegate_api(2, f"{WEB}/agents/enable-paid?credential=other")
+    assert Fake(api=api).client().paid_calls.status().approval_url == BUILT
+
+
+def test_server_link_on_another_origin_is_not_used() -> None:
+    api = delegate_api(2, f"https://look-alike.example.test/agents/enable-paid?credential={CREDENTIAL}")
+    assert Fake(api=api).client().paid_calls.status().approval_url == BUILT
 
 
 def test_wait_times_out() -> None:

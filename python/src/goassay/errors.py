@@ -12,6 +12,7 @@ as the nearest class (or ``AssayError`` itself)::
     │   ├─ PaymentRequiredError          the tool is paid and no signer was given (.requirement)
     │   ├─ PaymentSchemeUnsupportedError no signer for the requirement's network (.network)
     │   └─ PaymentRefusedError           refused locally before signing (.guard); nothing signed
+    │       └─ PaymentNetworkUnknownError the network is not in the SDK's network table (.network)
     ├─ RateLimitError                    429, RATE_LIMITED, quota or velocity limits (.retry_after)
     ├─ NetworkError                      no answer: connection failure
     │   └─ TimeoutError
@@ -43,6 +44,13 @@ class AssayError(Exception):
         self.status = status
         self.fix_url = fix_url
         self.details = details
+        self.idempotency_key: str | None = None
+        """On an error out of ``tools.call``: the idempotency key of that logical call. Call again
+        with ``idempotency_key=err.idempotency_key`` to retry safely: Assay replays a served call
+        instead of charging it twice."""
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(code={self.code!r}, message={self.message!r})"
 
 
 class ConfigError(AssayError):
@@ -83,6 +91,17 @@ class PaymentRefusedError(PaymentError):
     def __init__(self, guard: str, code: str, reason: str, *, fix_url: str | None = None) -> None:
         super().__init__(code, f"payment refused before signing: {reason}", fix_url=fix_url)
         self.guard = guard
+
+
+class PaymentNetworkUnknownError(PaymentRefusedError):
+    def __init__(self, network: str) -> None:
+        super().__init__(
+            "G2",
+            "G2_NETWORK",
+            f"the network {network} is not in this SDK's network table (production values ship with a later"
+            " release; pass networks= for a non-production environment)",
+        )
+        self.network = network
 
 
 class RateLimitError(AssayError):

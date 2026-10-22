@@ -12,14 +12,16 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from goassay import _paid_calls, _receipts, _tools
+from goassay import _tools
 from goassay._chain import ChainReader
 from goassay._context import Context
-from goassay._eip155 import DEFAULT_LIMITS, Eip155Scheme, check_limits, eip155_networks
+from goassay._eip155 import DEFAULT_LIMITS, Eip155Scheme, check_limits
 from goassay._http import HttpConfig, Logger, origin_of
+from goassay._networks import network_table
 from goassay._ops import CallOp, Flow, HttpOp, HttpResult, SleepOp
-from goassay._paid_calls import PaidCallsStatus
-from goassay._tools import SearchResult, ToolResult
+from goassay._paid_calls import AsyncPaidCalls, PaidCalls
+from goassay._receipts import AsyncReceipts, Receipts
+from goassay._tools import AsyncTools, Tools
 from goassay.errors import ConfigError, NetworkError, TimeoutError
 from goassay.signers import EvmSigner, Signer
 
@@ -27,6 +29,8 @@ T = TypeVar("T")
 
 DEFAULT_MCP_URL = "https://mcp.goassay.ai/"
 DEFAULT_API_URL = "https://api.goassay.ai/api/v1"
+# The web app, where a person approves a payment key.
+DEFAULT_WEB_URL = "https://portal.goassay.ai"
 _LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 
 
@@ -46,9 +50,11 @@ def _build_context(
     api_key: str | None,
     mcp_url: str,
     api_url: str,
+    web_url: str,
     signer: Signer | None,
     signers: Sequence[Signer] | None,
     networks: Mapping[str, Mapping[str, Any]] | None,
+    rpc_urls: Mapping[str, list[str]] | None,
     limits: Mapping[str, str] | None,
     on_payment: Callable[[dict[str, Any]], Any] | None,
     timeout: float,
@@ -63,6 +69,7 @@ def _build_context(
         raise ConfigError("api_key is not valid")
     _check_url("mcp_url", mcp_url)
     api_url = _check_url("api_url", api_url).rstrip("/")
+    web_origin = origin_of(_check_url("web_url", web_url))
     all_signers = tuple(([signer] if signer is not None else []) + list(signers or []))
     for s in all_signers:
         if not isinstance(s, EvmSigner):
@@ -84,13 +91,14 @@ def _build_context(
         logger=logger,
         now=now,
     )
-    table = eip155_networks(networks or {})
+    table = network_table(networks, rpc_urls)
     ctx = Context(
         http=http,
         mcp_url=mcp_url,
         api_url=api_url,
         signers=all_signers,
         networks=table,
+        web_origin=web_origin,
         on_payment=on_payment,
         max_retries=max_retries,
         now=now,
@@ -133,7 +141,11 @@ class Assay(_Base):
     - ``paid_calls.status / bind / wait_until_active`` to set up a payment key.
 
     Every option has a default: the API key from ``ASSAY_API_KEY``, ``mcp.goassay.ai`` and
-    ``api.goassay.ai``, an ``httpx.Client``, 2 retries honouring ``Retry-After``, the system clock.
+    ``api.goassay.ai``, ``portal.goassay.ai`` for the approval link, an ``httpx.Client``, 2 retries
+    honouring ``Retry-After``, the system clock, and local limits of $0.50 a call and $5 per
+    rolling 24 hours. ``networks=`` configures payment networks (chainId, escrow, asset, decimals,
+    rpcUrls), merged over the SDK's built-in table: a new network is added, and an entry for a
+    built-in network replaces it whole. ``rpc_urls=`` sets your own RPC URLs for a network.
     """
 
     def __init__(
@@ -142,9 +154,11 @@ class Assay(_Base):
         api_key: str | None = None,
         mcp_url: str = DEFAULT_MCP_URL,
         api_url: str = DEFAULT_API_URL,
+        web_url: str = DEFAULT_WEB_URL,
         signer: Signer | None = None,
         signers: Sequence[Signer] | None = None,
         networks: Mapping[str, Mapping[str, Any]] | None = None,
+        rpc_urls: Mapping[str, list[str]] | None = None,
         limits: Mapping[str, str] | None = None,
         on_payment: Callable[[dict[str, Any]], bool | None] | None = None,
         http_client: httpx.Client | None = None,
@@ -158,9 +172,11 @@ class Assay(_Base):
             api_key=api_key,
             mcp_url=mcp_url,
             api_url=api_url,
+            web_url=web_url,
             signer=signer,
             signers=signers,
             networks=networks,
+            rpc_urls=rpc_urls,
             limits=limits,
             on_payment=on_payment,
             timeout=timeout,
@@ -171,6 +187,8 @@ class Assay(_Base):
         self._owns_client = http_client is None
         self._client = http_client or httpx.Client()
         self._sleep = sleep
+        self.networks = self._ctx.networks
+        """The payment network table in use: the built-in one with ``networks=`` merged, after ``rpc_urls=``."""
         self.tools = Tools(self)
         self.receipts = Receipts(self)
         self.paid_calls = PaidCalls(self)
@@ -229,9 +247,11 @@ class AsyncAssay(_Base):
         api_key: str | None = None,
         mcp_url: str = DEFAULT_MCP_URL,
         api_url: str = DEFAULT_API_URL,
+        web_url: str = DEFAULT_WEB_URL,
         signer: Signer | None = None,
         signers: Sequence[Signer] | None = None,
         networks: Mapping[str, Mapping[str, Any]] | None = None,
+        rpc_urls: Mapping[str, list[str]] | None = None,
         limits: Mapping[str, str] | None = None,
         on_payment: Callable[[dict[str, Any]], bool | None | Awaitable[bool | None]] | None = None,
         http_client: httpx.AsyncClient | None = None,
@@ -245,9 +265,11 @@ class AsyncAssay(_Base):
             api_key=api_key,
             mcp_url=mcp_url,
             api_url=api_url,
+            web_url=web_url,
             signer=signer,
             signers=signers,
             networks=networks,
+            rpc_urls=rpc_urls,
             limits=limits,
             on_payment=on_payment,
             timeout=timeout,
@@ -258,6 +280,7 @@ class AsyncAssay(_Base):
         self._owns_client = http_client is None
         self._client = http_client or httpx.AsyncClient()
         self._sleep = sleep
+        self.networks = self._ctx.networks
         self.tools = AsyncTools(self)
         self.receipts = AsyncReceipts(self)
         self.paid_calls = AsyncPaidCalls(self)
@@ -301,108 +324,3 @@ class AsyncAssay(_Base):
 
     async def __aexit__(self, *_: object) -> None:
         await self.aclose()
-
-
-# --- resources: one module of flows per area, a thin sync and async face each ---------------
-
-
-class Tools:
-    def __init__(self, client: Assay) -> None:
-        self._c = client
-
-    def search(
-        self,
-        query: str,
-        *,
-        limit: int | None = None,
-        category: str | None = None,
-        detail: str | None = None,
-        cursor: str | None = None,
-    ) -> SearchResult:
-        """``search_tools``: tools this URL can run, by what they do. Free."""
-        opts = {"limit": limit, "category": category, "detail": detail, "cursor": cursor}
-        return self._c._run(_tools.search(self._c._ctx, query, opts))
-
-    def get(self, name: str) -> dict[str, Any]:
-        """``get_tool``: one tool's description, schemas, price and version. Free."""
-        return self._c._run(_tools.get(self._c._ctx, name))
-
-    def call(
-        self, name: str, arguments: dict[str, Any] | None = None, *, idempotency_key: str | None = None
-    ) -> ToolResult:
-        """Calls a tool; a paid tool is checked, signed once and retried with the same key."""
-        return self._c._run(_tools.call(self._c._ctx, name, arguments or {}, idempotency_key))
-
-
-class AsyncTools:
-    def __init__(self, client: AsyncAssay) -> None:
-        self._c = client
-
-    async def search(
-        self,
-        query: str,
-        *,
-        limit: int | None = None,
-        category: str | None = None,
-        detail: str | None = None,
-        cursor: str | None = None,
-    ) -> SearchResult:
-        opts = {"limit": limit, "category": category, "detail": detail, "cursor": cursor}
-        return await self._c._run(_tools.search(self._c._ctx, query, opts))
-
-    async def get(self, name: str) -> dict[str, Any]:
-        return await self._c._run(_tools.get(self._c._ctx, name))
-
-    async def call(
-        self, name: str, arguments: dict[str, Any] | None = None, *, idempotency_key: str | None = None
-    ) -> ToolResult:
-        return await self._c._run(_tools.call(self._c._ctx, name, arguments or {}, idempotency_key))
-
-
-class Receipts:
-    def __init__(self, client: Assay) -> None:
-        self._c = client
-
-    def get(self, intent_id: str) -> dict[str, Any]:
-        """The receipt of a call, by ``result.receipt["intentId"]``. Needs ``activity:read``."""
-        return self._c._run(_receipts.get(self._c._ctx, intent_id))
-
-
-class AsyncReceipts:
-    def __init__(self, client: AsyncAssay) -> None:
-        self._c = client
-
-    async def get(self, intent_id: str) -> dict[str, Any]:
-        return await self._c._run(_receipts.get(self._c._ctx, intent_id))
-
-
-class PaidCalls:
-    def __init__(self, client: Assay) -> None:
-        self._c = client
-
-    def status(self) -> PaidCallsStatus:
-        """Where paid calls stand for this API key and this client's signer."""
-        return self._c._run(_paid_calls.status(self._c._ctx))
-
-    def bind(self, *, network: str | None = None) -> PaidCallsStatus:
-        """Binds this client's EVM signer to the API key; a no-op when it is bound already.
-        A person then approves the key at ``approval_url``, comparing the fingerprint."""
-        return self._c._run(_paid_calls.bind(self._c._ctx, network))
-
-    def wait_until_active(self, *, timeout: float = 900.0) -> PaidCallsStatus:
-        """Polls until a person approved the key, for up to ``timeout`` seconds."""
-        return self._c._run(_paid_calls.wait_until_active(self._c._ctx, timeout))
-
-
-class AsyncPaidCalls:
-    def __init__(self, client: AsyncAssay) -> None:
-        self._c = client
-
-    async def status(self) -> PaidCallsStatus:
-        return await self._c._run(_paid_calls.status(self._c._ctx))
-
-    async def bind(self, *, network: str | None = None) -> PaidCallsStatus:
-        return await self._c._run(_paid_calls.bind(self._c._ctx, network))
-
-    async def wait_until_active(self, *, timeout: float = 900.0) -> PaidCallsStatus:
-        return await self._c._run(_paid_calls.wait_until_active(self._c._ctx, timeout))

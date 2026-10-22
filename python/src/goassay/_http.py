@@ -47,7 +47,7 @@ def retry_after_seconds(value: str | None, now: float) -> float | None:
     if value is None or not value.strip():
         return None
     v = value.strip()
-    if v.isdigit():
+    if re.fullmatch(r"[0-9]+", v):
         return float(v)
     try:
         return max(0.0, parsedate_to_datetime(v).timestamp() - now)
@@ -73,7 +73,7 @@ def _rpc_rate_limit(text: str) -> tuple[bool, float | None]:
 
 @dataclass
 class HttpConfig:
-    api_key: str
+    api_key: str = field(repr=False)
     origins: tuple[str, ...]
     timeout: float
     max_retries: int

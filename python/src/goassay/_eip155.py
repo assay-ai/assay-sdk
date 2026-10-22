@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import math
 import re
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -43,8 +44,11 @@ class NetworkEntry:
     rpc: tuple[str, ...] = ()
 
 
-def eip155_networks(table: Mapping[str, Mapping[str, Any]]) -> dict[str, NetworkEntry]:
-    """Checks the caller's network table: ``{caip2: {escrow, asset, decimals, rpc}}``."""
+def eip155_networks(
+    table: Mapping[str, Mapping[str, Any]], fail: Callable[[str], Exception] = ConfigError
+) -> dict[str, NetworkEntry]:
+    """Checks a network table ``{caip2: {chainId?, escrow, asset, decimals, rpcUrls}}``. ``fail`` makes the
+    error: ``ConfigError`` for the caller's own table, a server error for the API's."""
     out: dict[str, NetworkEntry] = {}
     for nid, n in table.items():
         if not nid.startswith("eip155:"):
@@ -53,21 +57,24 @@ def eip155_networks(table: Mapping[str, Mapping[str, Any]]) -> dict[str, Network
         escrow = parse_caip10(n.get("escrow"))
         asset = parse_caip19_erc20(n.get("asset"))
         if chain_id is None:
-            raise ConfigError(f"networks: {nid} is not a CAIP-2 eip155 chain")
+            raise fail(f"networks: {nid} is not a CAIP-2 eip155 chain")
+        given_id = n.get("chainId")
+        if given_id is not None and (isinstance(given_id, bool) or given_id != chain_id):
+            raise fail(f"networks[{nid!r}].chainId is not {chain_id}")
         if escrow is None or escrow[0] != chain_id:
-            raise ConfigError(f"networks[{nid!r}].escrow must be a checksummed CAIP-10 account on {nid}")
+            raise fail(f"networks[{nid!r}].escrow must be a checksummed CAIP-10 account on {nid}")
         if asset is None or asset[0] != chain_id:
-            raise ConfigError(f"networks[{nid!r}].asset must be a checksummed CAIP-19 erc20 asset on {nid}")
+            raise fail(f"networks[{nid!r}].asset must be a checksummed CAIP-19 erc20 asset on {nid}")
         decimals = n.get("decimals")
         if not isinstance(decimals, int) or isinstance(decimals, bool) or not 0 <= decimals <= 36:
-            raise ConfigError(f"networks[{nid!r}].decimals is invalid")
-        rpc = n.get("rpc")
+            raise fail(f"networks[{nid!r}].decimals is invalid")
+        rpc = n.get("rpcUrls")
         if (
             not isinstance(rpc, (list, tuple))
             or not rpc
             or not all(isinstance(u, str) and is_usable_rpc_url(u) for u in rpc)
         ):
-            raise ConfigError(f"networks[{nid!r}].rpc must list at least one https RPC URL")
+            raise fail(f"networks[{nid!r}].rpcUrls must list at least one https RPC URL")
         out[nid] = NetworkEntry(nid, chain_id, escrow[1], n["escrow"], n["asset"], decimals, tuple(rpc))
     return out
 
@@ -140,15 +147,25 @@ def guard_and_build(ctx: dict[str, Any], issued_at: int, networks: Mapping[str, 
 
 
 _SPEND_WINDOW = 86_400
-# Vouchers signed in this process, by key: every client using one key shares one 24 h cap.
+# Vouchers signed in this process, by key: every client using one key shares one 24 h cap. One
+# list per key, only ever changed in place and under the lock, so a reservation is always released
+# from the list the guards read, and threads cannot both pass the cap. Per process only: not
+# shared across processes or restarts; the on-chain caps are the bound across processes.
 _LEDGER: dict[str, list[dict[str, Any]]] = {}
+_LEDGER_LOCK = threading.Lock()
 
 
 def _spent_by(address: str, now: int) -> list[dict[str, Any]]:
-    key = address.lower()
-    kept = [e for e in _LEDGER.get(key, []) if e["at"] > now - _SPEND_WINDOW]
-    _LEDGER[key] = kept
-    return kept
+    """The key's ledger list, trimmed to the window. Call with ``_LEDGER_LOCK`` held."""
+    entries = _LEDGER.setdefault(address.lower(), [])
+    entries[:] = [e for e in entries if e["at"] > now - _SPEND_WINDOW]
+    return entries
+
+
+def reset_spend_ledger() -> None:
+    """Tests only: forget every signed voucher of this process."""
+    with _LEDGER_LOCK:
+        _LEDGER.clear()
 
 
 def _account_on(value: object, chain_id: int) -> str | None:
@@ -193,8 +210,11 @@ class Prepared:
         return voucher_envelope(self.wire, signature, self.provider_id, self.contract_version)
 
     def release(self) -> None:
-        if self._reserved in self._signed:
-            self._signed.remove(self._reserved)
+        with _LEDGER_LOCK:
+            for i, e in enumerate(self._signed):
+                if e is self._reserved:
+                    del self._signed[i]
+                    return
 
 
 class Eip155Scheme:
@@ -227,17 +247,62 @@ class Eip155Scheme:
             local_key = to_checksum_address(signer.address)
         except (TypeError, ValueError):
             return GuardResult(False, "G5", "G5_LOCAL_KEY_INVALID", "the signer's address is not readable")
+        networks = self.networks
         req = requirement if isinstance(requirement, dict) else None
         nid = req.get("network") if req else None
-        entry = self.networks.get(nid) if isinstance(nid, str) else None
+        entry = networks.get(nid) if isinstance(nid, str) else None
         payer = _account_on(req.get("payer"), entry.chain_id) if entry and req else None
+        # Before any chain read, as the reference does: these refusals say what to do.
+        if entry and req and payer == local_key:
+            return GuardResult(
+                False, "G5", "G5_LOCAL_KEY_IS_PAYER", "the signer is the payer; use a dedicated payment key"
+            )
+        if entry and req and _account_on(req.get("delegate"), entry.chain_id) != local_key:
+            return GuardResult(
+                False,
+                "G5",
+                "G5_DELEGATE_MISMATCH",
+                "this signer is not the payment key bound to this API key; call paid_calls.bind() and approve it",
+            )
         chain = None
         if entry and payer:
             net = ChainNetwork(entry.id, entry.chain_id, entry.escrow, entry.rpc)
             chain = yield from self.chain.read(net, payer, local_key)
         quote = yield from self.quote(tool)
 
-        # No I/O from here to the spend record, so two calls in flight cannot both pass the cap.
+        # No I/O from here to the spend record, and the ledger lock held throughout, so two calls in
+        # flight (or two threads) cannot both pass the cap.
+        with _LEDGER_LOCK:
+            return self._guard_and_reserve(
+                requirement,
+                req,
+                entry,
+                payer,
+                chain,
+                quote,
+                tool,
+                called_at,
+                signer,
+                local_key,
+                idempotency_key,
+                networks,
+            )
+
+    def _guard_and_reserve(
+        self,
+        requirement: Any,
+        req: dict[str, Any] | None,
+        entry: NetworkEntry | None,
+        payer: str | None,
+        chain: dict[str, Any] | None,
+        quote: dict[str, str] | None,
+        tool: str,
+        called_at: int,
+        signer: EvmSigner,
+        local_key: str,
+        idempotency_key: str,
+        networks: Mapping[str, NetworkEntry],
+    ) -> Prepared | GuardResult:
         now = math.floor(self.now())
         signed = _spent_by(local_key, now)
         ctx = {
@@ -259,7 +324,7 @@ class Eip155Scheme:
             "paidUrls": [self.mcp_url],
             "nowSeconds": now,
         }
-        built = guard_and_build(ctx, corrected_now(now, self.date_offset()), self.networks)
+        built = guard_and_build(ctx, corrected_now(now, self.date_offset()), networks)
         if not built.ok:
             assert built.refusal is not None
             if built.refusal.guard in ("G4", "G6") and entry and payer:
@@ -294,7 +359,9 @@ class Eip155Scheme:
     def on_refused(self, code: str, requirement: Any, signer: EvmSigner) -> None:
         if code != "PAYMENT_VOUCHER_DELEGATE_INACTIVE" or not isinstance(requirement, dict):
             return
-        entry = self.networks.get(requirement.get("network"))  # type: ignore[arg-type]
+        networks = self.networks
+        nid = requirement.get("network")
+        entry = networks.get(nid) if isinstance(nid, str) else None
         payer = _account_on(requirement.get("payer"), entry.chain_id) if entry else None
         if entry and payer:
             self.chain.invalidate(entry.id, payer, to_checksum_address(signer.address))

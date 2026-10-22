@@ -40,15 +40,16 @@ class QuoteCache:
 class Context:
     """What every resource module shares. One resource area = one module that takes this."""
 
-    http: HttpConfig
+    http: HttpConfig = field(repr=False)
     mcp_url: str
     api_url: str
     signers: tuple[EvmSigner, ...]
     networks: dict[str, NetworkEntry]
+    web_origin: str
     on_payment: Callable[[dict[str, Any]], Any] | None
     max_retries: int
     now: Callable[[], float] = time.time
-    schemes: dict[str, Eip155Scheme] = field(default_factory=dict)
+    schemes: dict[str, Eip155Scheme] = field(default_factory=dict, repr=False)
     quotes: QuoteCache = field(init=False)
 
     def __post_init__(self) -> None:
