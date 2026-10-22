@@ -25,8 +25,8 @@ with Assay() as assay:  # ASSAY_API_KEY
     res = assay.tools.call("weather_forecast", {"city": "Lisbon"})
 
     res.structured_content  # the tool's output
-    res.is_error            # True only for the provider's own tool error
-    res.receipt             # what the call cost
+    res.is_error  # True only for the provider's own tool error
+    res.receipt  # what the call cost
 ```
 
 ## Paid call with a local key
