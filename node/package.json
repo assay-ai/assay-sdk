@@ -1,7 +1,6 @@
 {
   "name": "@goassay-ai/sdk",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Call tools through Assay over MCP, with free and paid calls signed by your own key.",
   "license": "MIT",
   "repository": {
@@ -9,7 +8,7 @@
     "url": "git+https://github.com/assay-ai/assay-sdk.git",
     "directory": "node"
   },
-  "homepage": "https://github.com/assay-ai/assay-sdk#readme",
+  "homepage": "https://docs.goassay.ai/developers",
   "bugs": {
     "url": "https://github.com/assay-ai/assay-sdk/issues"
   },
@@ -33,6 +32,10 @@
   "sideEffects": false,
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

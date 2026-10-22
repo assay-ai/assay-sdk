@@ -2,7 +2,7 @@
 
 The Python SDK for [Assay](https://goassay.ai): call tools over MCP, with free calls and paid calls signed by a key you hold.
 
-**Status: pre-release.** This package is not published yet, and its API can still change.
+**Status: early release (0.x).** The API can still change before 1.0; see the [changelog](https://github.com/assay-ai/assay-sdk/blob/main/python/CHANGELOG.md).
 
 ```sh
 pip install goassay
@@ -235,8 +235,8 @@ mypy
 pytest
 ```
 
-The tests run the shared vectors in [`../vectors`](../vectors) (`vectors/eip155/`) and unit tests on a fake transport.
+The tests run the shared vectors in [`vectors/`](https://github.com/assay-ai/assay-sdk/tree/main/vectors) (`vectors/eip155/`) and unit tests on a fake transport.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/assay-ai/assay-sdk/blob/main/python/LICENSE).

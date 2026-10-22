@@ -1,12 +1,9 @@
 name: Release
 
-# DRAFT: publishing is switched off. Every job has `if: false` until the first release is
-# approved. To switch a job on:
-#   1. remove `"private": true` from node/package.json (npm) and set the version;
-#   2. add this repository's release.yml as a trusted publisher on npmjs.com and on pypi.org
-#      (PyPI environment name: pypi), with a required reviewer on the environments;
-#   3. protect the tag patterns below with a ruleset that requires signed tags;
-#   4. replace `if: false` with the `startsWith(...)` condition in the comment next to it.
+# Prerequisites (see "Release checklist" in README.md): environments `npm` and `pypi` with a
+# required reviewer; a tag ruleset requiring signed tags for node/v* and python/v*; this
+# workflow registered as trusted publisher on npmjs.com (@goassay-ai/sdk) and pypi.org
+# (goassay, environment pypi). No registry token is stored anywhere.
 #
 # Push a signed tag to publish one package:
 #   node/v0.1.0    -> npm  @goassay-ai/sdk
@@ -22,7 +19,7 @@ permissions:
 
 jobs:
   npm:
-    if: false # startsWith(github.ref_name, 'node/v')
+    if: startsWith(github.ref_name, 'node/v')
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -37,7 +34,12 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - name: Tag matches package version
-        run: test "${GITHUB_REF_NAME#node/v}" = "$(node -p "require('./package.json').version")"
+        run: |
+          tag="${GITHUB_REF_NAME#node/v}"
+          pkg="$(node -p "require('./package.json').version")"
+          src="$(sed -n 's/^export const VERSION = "\(.*\)";$/\1/p' src/version.ts)"
+          echo "tag=$tag package.json=$pkg src/version.ts=$src"
+          test "$tag" = "$pkg" && test "$tag" = "$src"
         working-directory: node
       - run: npm ci
         working-directory: node
@@ -63,7 +65,7 @@ jobs:
         working-directory: node
 
   pypi:
-    if: false # startsWith(github.ref_name, 'python/v')
+    if: startsWith(github.ref_name, 'python/v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -77,13 +79,21 @@ jobs:
         with:
           python-version: '3.12'
       - name: Tag matches package version
-        run: test "${GITHUB_REF_NAME#python/v}" = "$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+        run: |
+          tag="${GITHUB_REF_NAME#python/v}"
+          pkg="$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          src="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/goassay/__init__.py)"
+          echo "tag=$tag pyproject.toml=$pkg __version__=$src"
+          test "$tag" = "$pkg" && test "$tag" = "$src"
         working-directory: python
-      - run: pip install -e '.[dev]' build
+      - run: pip install -e '.[dev]' build==1.6.1 twine==7.0.0
         working-directory: python
       - run: ruff check . && ruff format --check . && mypy && pytest
         working-directory: python
       - run: python -m build
+        working-directory: python
+      - name: Check the built distributions
+        run: twine check --strict dist/*
         working-directory: python
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:

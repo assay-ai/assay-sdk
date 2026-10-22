@@ -4,16 +4,26 @@ build-backend = "hatchling.build"
 
 [project]
 name = "goassay"
-version = "0.0.0"
+version = "0.1.0"
 description = "Call tools through Assay over MCP, with free and paid calls signed by your own key."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
+authors = [{ name = "Assay" }]
+keywords = ["assay", "mcp", "ai-agents", "tools", "payments", "evm"]
 dependencies = ["eth-account>=0.13,<0.15", "httpx>=0.27,<1"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
   "Typing :: Typed",
 ]
 
@@ -21,13 +31,17 @@ classifiers = [
 dev = ["pytest==9.1.1", "ruff==0.16.10", "mypy==2.4.0"]
 
 [project.urls]
-Homepage = "https://github.com/assay-ai/assay-sdk"
+Homepage = "https://docs.goassay.ai/developers"
 Source = "https://github.com/assay-ai/assay-sdk/tree/main/python"
 Issues = "https://github.com/assay-ai/assay-sdk/issues"
+Changelog = "https://github.com/assay-ai/assay-sdk/blob/main/python/CHANGELOG.md"
 Documentation = "https://docs.goassay.ai/developers"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/goassay"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/goassay", "README.md", "LICENSE", "CHANGELOG.md", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
