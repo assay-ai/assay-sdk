@@ -191,11 +191,21 @@ export class Tools {
     const prepared = await scheme.prepare(input);
     if (!prepared.ok) throw new PaymentRefusedError(prepared.guard, prepared.code, prepared.reason, fixUrl);
 
-    let envelope: Record<string, unknown>;
-    try {
-      if (this.c.onPayment && (await this.c.onPayment(Object.freeze({ ...prepared.details }))) === false) {
+    if (this.c.onPayment) {
+      let verdict: boolean | void;
+      try {
+        verdict = await this.c.onPayment(Object.freeze({ ...prepared.details }));
+      } catch (err) {
+        prepared.release();
+        throw err;
+      }
+      if (verdict === false) {
+        prepared.release();
         throw new PaymentRefusedError("onPayment", "PAYMENT_REFUSED_BY_CALLER", "the onPayment hook refused it");
       }
+    }
+    let envelope: Record<string, unknown>;
+    try {
       envelope = await prepared.sign();
     } catch (err) {
       prepared.release();
