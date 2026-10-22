@@ -1,0 +1,90 @@
+name: Release
+
+# DRAFT: publishing is switched off. Every job has `if: false` until the first release is
+# approved. To switch a job on:
+#   1. remove `"private": true` from node/package.json (npm) and set the version;
+#   2. add this repository's release.yml as a trusted publisher on npmjs.com and on pypi.org
+#      (PyPI environment name: pypi), with a required reviewer on the environments;
+#   3. protect the tag patterns below with a ruleset that requires signed tags;
+#   4. replace `if: false` with the `startsWith(...)` condition in the comment next to it.
+#
+# Push a signed tag to publish one package:
+#   node/v0.1.0    -> npm  @goassay-ai/sdk
+#   python/v0.1.0  -> PyPI goassay
+on:
+  push:
+    tags:
+      - 'node/v*'
+      - 'python/v*'
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    if: false # startsWith(github.ref_name, 'node/v')
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing + provenance
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Tag matches package version
+        run: test "${GITHUB_REF_NAME#node/v}" = "$(node -p "require('./package.json').version")"
+        working-directory: node
+      - run: npm ci
+        working-directory: node
+      - run: npm run lint
+        working-directory: node
+      - run: npm run typecheck
+        working-directory: node
+      - run: npm test
+        working-directory: node
+      - run: npm run build
+        working-directory: node
+      # Trusted publishing (OIDC) needs npm 11.5.1 or newer; Node 22 ships npm 10.
+      - run: npm install -g npm@11.6.2
+      - name: Skip a version that is already on npm
+        id: published
+        run: |
+          if npm view "$(node -p "require('./package.json').name")@${GITHUB_REF_NAME#node/v}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          fi
+        working-directory: node
+      - if: steps.published.outputs.already != 'true'
+        run: npm publish --access public --provenance
+        working-directory: node
+
+  pypi:
+    if: false # startsWith(github.ref_name, 'python/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Tag matches package version
+        run: test "${GITHUB_REF_NAME#python/v}" = "$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+        working-directory: python
+      - run: pip install -e '.[dev]' build
+        working-directory: python
+      - run: ruff check . && ruff format --check . && mypy && pytest
+        working-directory: python
+      - run: python -m build
+        working-directory: python
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: python/dist

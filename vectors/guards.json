@@ -1,0 +1,3276 @@
+{
+  "description": "Local guards G1-G12 (spec/protocol.md section 9). 'base' is a context that passes every guard. Each case applies 'changes' to a copy of 'base' in order ('set' the value at 'path', or 'delete' it; a path of one key replaces that key) and runs the guards in order G1..G12. 'expect' is {ok: true}, or the first refusal: {ok: false, guard, code} and, where given, the exact 'reason'. Amounts are atomic units (6 decimals); limits are dollars; times are Unix seconds. Addresses are the public anvil/hardhat default accounts, TEST ONLY.",
+  "base": {
+    "requirement": {
+      "rail": "B",
+      "scheme": "voucher",
+      "network": "eip155:31337",
+      "payer": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+      "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "providerId": "c2b8d4f0-6e1a-4b3c-8d5e-7f9a0b1c2d3e",
+      "amount": {
+        "amount": "100000",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "contractVersion": 3,
+      "resource": "/mcp/tools/weather_forecast",
+      "requestHash": "sha256:3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+      "seq": "42",
+      "maxTimeoutSeconds": 300,
+      "signers": [
+        "payer",
+        "delegate"
+      ],
+      "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    "forwardedCall": {
+      "tool": "weather_forecast",
+      "at": 1785999798
+    },
+    "network": {
+      "id": "eip155:31337",
+      "escrow": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+      "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+      "decimals": 6
+    },
+    "quote": {
+      "maxAmount": "150000",
+      "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7"
+    },
+    "chain": {
+      "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "delegate": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "readAt": 1785999770,
+      "delegateMaxVoucherAmount": "500000",
+      "maxVoucherAmount": "1000000",
+      "active": true,
+      "validUntil": 1788591800
+    },
+    "localKey": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "recordedPayer": null,
+    "limits": {
+      "perCall": "0.50",
+      "perDay": "5",
+      "confirmAbove": null,
+      "providers": null
+    },
+    "signed": [],
+    "confirmation": null,
+    "canonicalUrl": "https://mcp.goassay.ai/",
+    "paidUrls": [
+      "https://mcp.goassay.ai/"
+    ],
+    "nowSeconds": 1785999800
+  },
+  "cases": [
+    {
+      "guard": "G1",
+      "name": "the base context passes every guard",
+      "changes": [],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "a requirement with its own 'ok' key is judged on its fields",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "ok"
+          ],
+          "value": false
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "rail A",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "rail"
+          ],
+          "value": "A"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_RAIL"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "scheme other than voucher",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "scheme"
+          ],
+          "value": "exact"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_SCHEME"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "requirement is null",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement"
+          ],
+          "value": null
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_NOT_A_REQUIREMENT"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "requirement is an array",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement"
+          ],
+          "value": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_NOT_A_REQUIREMENT"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "no forwarded tool call",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "forwardedCall"
+          ],
+          "value": null
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_NOT_FORWARDED"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "forwarded tool name empty",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "forwardedCall",
+            "tool"
+          ],
+          "value": ""
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_NOT_FORWARDED"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "forwarded call time missing",
+      "changes": [
+        {
+          "op": "delete",
+          "path": [
+            "forwardedCall",
+            "at"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_NOT_FORWARDED"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "forwarded call 120 s ago",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "forwardedCall",
+            "at"
+          ],
+          "value": 1785999680
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "forwarded call 121 s ago",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "forwardedCall",
+            "at"
+          ],
+          "value": 1785999679
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_FORWARD_TOO_OLD"
+      }
+    },
+    {
+      "guard": "G1",
+      "name": "forwarded call dated in the future",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "forwardedCall",
+            "at"
+          ],
+          "value": 1785999801
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G1",
+        "code": "G1_FORWARD_TOO_OLD"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "payTo is the built-in escrow",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "payTo"
+          ],
+          "value": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "network not in the built-in table",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "network"
+          ],
+          "value": null
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_NETWORK"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "requirement network differs from the built-in entry",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "network"
+          ],
+          "value": "eip155:1"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_NETWORK"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "payTo other escrow",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "payTo"
+          ],
+          "value": "eip155:31337:0x1111111111111111111111111111111111111111"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_PAY_TO"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "payTo is the escrow but not checksummed",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "payTo"
+          ],
+          "value": "eip155:31337:0xe5c0e5c0e5c0e5c0e5c0e5c0e5c0e5c0e5c0e5c0"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_PAY_TO"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "payTo is the escrow on another chain",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "payTo"
+          ],
+          "value": "eip155:1:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_PAY_TO"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "other asset",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "asset"
+          ],
+          "value": "eip155:31337/erc20:0x1111111111111111111111111111111111111111"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_ASSET"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "the built-in asset address on another chain",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "asset"
+          ],
+          "value": "eip155:1/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_ASSET"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "the built-in asset with a lower-case address",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "asset"
+          ],
+          "value": "eip155:31337/erc20:0xa55e7a55e7a55e7a55e7a55e7a55e7a55e7a55e7"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_ASSET"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "the built-in asset with an upper-case address",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "asset"
+          ],
+          "value": "eip155:31337/erc20:0xA55E7A55E7A55E7A55E7A55E7A55E7A55E7A55E7"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_ASSET"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "the built-in asset under an upper-case namespace",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "asset"
+          ],
+          "value": "eip155:31337/ERC20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_ASSET"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "asset decimals 18",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "decimals"
+          ],
+          "value": 18
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_DECIMALS"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "amount missing",
+      "changes": [
+        {
+          "op": "delete",
+          "path": [
+            "requirement",
+            "amount"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_AMOUNT"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "amount zero",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "0"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_AMOUNT"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "amount not an integer",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "1.5"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_AMOUNT"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "amount with a leading zero",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "0100000"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_AMOUNT"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "amount as a JSON number",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": 100000
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_AMOUNT"
+      }
+    },
+    {
+      "guard": "G2",
+      "name": "amount above uint64",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "18446744073709551616"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G2",
+        "code": "G2_AMOUNT"
+      }
+    },
+    {
+      "guard": "G3",
+      "name": "amount equal to quote.maxAmount",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "150000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G3",
+      "name": "no quote",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "quote"
+          ],
+          "value": null
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G3",
+        "code": "G3_NO_QUOTE"
+      }
+    },
+    {
+      "guard": "G3",
+      "name": "quote maxAmount unreadable",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "0.15"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G3",
+        "code": "G3_NO_QUOTE"
+      }
+    },
+    {
+      "guard": "G3",
+      "name": "quote asset in lower case (compared exactly)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "asset"
+          ],
+          "value": "eip155:31337/erc20:0xa55e7a55e7a55e7a55e7a55e7a55e7a55e7a55e7"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G3",
+        "code": "G3_QUOTE_ASSET"
+      }
+    },
+    {
+      "guard": "G3",
+      "name": "quote in another asset",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "asset"
+          ],
+          "value": "eip155:31337/erc20:0x1111111111111111111111111111111111111111"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G3",
+        "code": "G3_QUOTE_ASSET"
+      }
+    },
+    {
+      "guard": "G3",
+      "name": "quote without an asset",
+      "changes": [
+        {
+          "op": "delete",
+          "path": [
+            "quote",
+            "asset"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G3",
+        "code": "G3_QUOTE_ASSET"
+      }
+    },
+    {
+      "guard": "G3",
+      "name": "amount > quote.maxAmount",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "150001"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G3",
+        "code": "G3_ABOVE_QUOTE"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "recordedPayer equals the payer (CAIP-10)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "recordedPayer"
+          ],
+          "value": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "recordedPayer equals the payer (lower-case address)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "recordedPayer"
+          ],
+          "value": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "validUntil one second ahead",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "validUntil"
+          ],
+          "value": 1785999801
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "no chain read (or the RPCs disagree)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain"
+          ],
+          "value": null
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_NO_CHAIN_READ"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain validUntil unreadable",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "validUntil"
+          ],
+          "value": "soon"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_NO_CHAIN_READ"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "payer not checksummed",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "payer"
+          ],
+          "value": "eip155:31337:0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_PAYER_INVALID"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "recordedPayer differs",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "recordedPayer"
+          ],
+          "value": "eip155:31337:0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_PAYER_CHANGED",
+        "reason": "payer changed; run {run} enable-paid"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "the chain delegation names another payer",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "payer"
+          ],
+          "value": "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_NOT_DELEGATED"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain read 600 s old",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "readAt"
+          ],
+          "value": 1785999200
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain read 601 s old",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "readAt"
+          ],
+          "value": 1785999199
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_STALE_READ"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain read dated 120 s ahead (the clock-skew clamp)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "readAt"
+          ],
+          "value": 1785999920
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain read dated 121 s ahead",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "readAt"
+          ],
+          "value": 1785999921
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_STALE_READ"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain delegate not checksummed",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegate"
+          ],
+          "value": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_NO_CHAIN_READ"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain delegate as CAIP-10",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegate"
+          ],
+          "value": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_NO_CHAIN_READ"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain read time missing",
+      "changes": [
+        {
+          "op": "delete",
+          "path": [
+            "chain",
+            "readAt"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_NO_CHAIN_READ"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "chain read for another key",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegate"
+          ],
+          "value": "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_OTHER_KEY"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "delegation not active",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "active"
+          ],
+          "value": false
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_INACTIVE"
+      }
+    },
+    {
+      "guard": "G4",
+      "name": "validUntil equals now",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "validUntil"
+          ],
+          "value": 1785999800
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G4",
+        "code": "G4_EXPIRED"
+      }
+    },
+    {
+      "guard": "G5",
+      "name": "signers is only delegate",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "signers"
+          ],
+          "value": [
+            "delegate"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G5",
+      "name": "signers without delegate",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "signers"
+          ],
+          "value": [
+            "payer"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G5",
+        "code": "G5_NO_DELEGATE_SIGNER"
+      }
+    },
+    {
+      "guard": "G5",
+      "name": "signers missing",
+      "changes": [
+        {
+          "op": "delete",
+          "path": [
+            "requirement",
+            "signers"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G5",
+        "code": "G5_NO_DELEGATE_SIGNER"
+      }
+    },
+    {
+      "guard": "G5",
+      "name": "delegate is another key",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "delegate"
+          ],
+          "value": "eip155:31337:0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G5",
+        "code": "G5_DELEGATE_MISMATCH"
+      }
+    },
+    {
+      "guard": "G5",
+      "name": "delegate null",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "delegate"
+          ],
+          "value": null
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G5",
+        "code": "G5_DELEGATE_MISMATCH"
+      }
+    },
+    {
+      "guard": "G5",
+      "name": "local key unreadable",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "localKey"
+          ],
+          "value": "0x1234"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G5",
+        "code": "G5_LOCAL_KEY_INVALID"
+      }
+    },
+    {
+      "guard": "G5",
+      "name": "localKey === payer",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "localKey"
+          ],
+          "value": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegate"
+          ],
+          "value": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        },
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "delegate"
+          ],
+          "value": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G5",
+        "code": "G5_LOCAL_KEY_IS_PAYER"
+      }
+    },
+    {
+      "guard": "G6",
+      "name": "amount equal to both chain caps",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "100000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "100000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G6",
+      "name": "amount > delegateMaxVoucherAmount",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "99999"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G6",
+        "code": "G6_DELEGATE_CAP"
+      }
+    },
+    {
+      "guard": "G6",
+      "name": "delegate cannot sign now (cap 0)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "0"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G6",
+        "code": "G6_DELEGATE_CAP"
+      }
+    },
+    {
+      "guard": "G6",
+      "name": "amount > maxVoucherAmount",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "99999"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G6",
+        "code": "G6_ESCROW_CAP"
+      }
+    },
+    {
+      "guard": "G6",
+      "name": "chain cap unreadable",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "-1"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G6",
+        "code": "G6_CAPS_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "amount 500000 (= $0.50) passes",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "500000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "amount 500001 (> $0.50)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "500001"
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_PER_CALL"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "spent 4.70 + 0.30 = 5 passes",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "300000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1785996200,
+              "amount": "4700000"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "spent 4.80 + 0.30 > 5",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "300000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1785996200,
+              "amount": "2400000"
+            },
+            {
+              "at": 1785999740,
+              "amount": "2400000"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_PER_DAY"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "a voucher exactly 24 h old no longer counts",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1785913400,
+              "amount": "5000000"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "a voucher 24 h minus 1 s old still counts",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1785913401,
+              "amount": "5000000"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_PER_DAY"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "a voucher dated in the future counts",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1786003400,
+              "amount": "5000000"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_PER_DAY"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "a signed entry with an unreadable amount",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1785999740,
+              "amount": "1.5"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_STATE_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "a signed entry without a time",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "amount": "1"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_STATE_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "signed is not a list",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": null
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_STATE_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "perCall 0.57 and amount 570000 (no float rounding)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "570000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "perCall"
+          ],
+          "value": "0.57"
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "perDay 4.35 reached exactly (no float rounding)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "300000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "perDay"
+          ],
+          "value": "4.35"
+        },
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1785999740,
+              "amount": "4050000"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "perCall 2.01 and amount 2010000 (no float rounding)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "2010000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "perCall"
+          ],
+          "value": "2.01"
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "perDay 4.02 reached exactly (no float rounding)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "amount",
+            "amount"
+          ],
+          "value": "300000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "perDay"
+          ],
+          "value": "4.02"
+        },
+        {
+          "op": "set",
+          "path": [
+            "signed"
+          ],
+          "value": [
+            {
+              "at": 1785999740,
+              "amount": "3720000"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "quote",
+            "maxAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "delegateMaxVoucherAmount"
+          ],
+          "value": "10000000"
+        },
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "maxVoucherAmount"
+          ],
+          "value": "10000000"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "perCall not a dollar amount",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "perCall"
+          ],
+          "value": "abc"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_LIMITS_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "perCall finer than the asset",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "perCall"
+          ],
+          "value": "0.0000001"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_LIMITS_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "perDay negative",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "perDay"
+          ],
+          "value": "-5"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_LIMITS_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "amount > confirmAbove, not confirmed",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_REQUIRED"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "amount > confirmAbove, confirmed for exactly this payment",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "42"
+          }
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation for another amount",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "90000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "42"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation for another seq",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "43"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation for another tool",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "other_tool",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "42"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation for another provider",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "42"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation for another payTo",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0x1111111111111111111111111111111111111111",
+            "seq": "42"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation for another asset",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xa55e7a55e7a55e7a55e7a55e7a55e7a55e7a55e7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "42"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation for another network",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:1",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "42"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation with an extra key",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+            "seq": "42",
+            "extra": "x"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation missing a key",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": {
+            "tool": "weather_forecast",
+            "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "amount": "100000",
+            "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+            "network": "eip155:31337",
+            "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmation is not an object",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "confirmation"
+          ],
+          "value": true
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_CONFIRMATION_MISMATCH"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "confirmAbove does not mask G12",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/escrow/debts/abc"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_DEBT_OR_SEQ_ENDPOINT"
+      }
+    },
+    {
+      "guard": "G11",
+      "name": "confirmAbove does not mask G11",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "paidUrls"
+          ],
+          "value": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G11",
+        "code": "G11_URL_NOT_PAID"
+      }
+    },
+    {
+      "guard": "G8",
+      "name": "confirmAbove does not mask G8",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "providers"
+          ],
+          "value": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G8",
+        "code": "G8_PROVIDER_NOT_ALLOWED"
+      }
+    },
+    {
+      "guard": "G9",
+      "name": "confirmAbove does not mask G9",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.05"
+        },
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "seq"
+          ],
+          "value": "0"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G9",
+        "code": "G9_SEQ"
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "amount equal to confirmAbove",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "0.10"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G7",
+      "name": "confirmAbove unreadable",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "confirmAbove"
+          ],
+          "value": "off"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G7",
+        "code": "G7_LIMITS_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G8",
+      "name": "providers set and provider present (lower case)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "providers"
+          ],
+          "value": [
+            "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+            "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G8",
+      "name": "providers set and provider present (CAIP-10)",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "providers"
+          ],
+          "value": [
+            "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G8",
+      "name": "providers set and provider absent",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "providers"
+          ],
+          "value": [
+            "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G8",
+        "code": "G8_PROVIDER_NOT_ALLOWED"
+      }
+    },
+    {
+      "guard": "G8",
+      "name": "providers set and empty",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "providers"
+          ],
+          "value": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G8",
+        "code": "G8_PROVIDER_NOT_ALLOWED"
+      }
+    },
+    {
+      "guard": "G8",
+      "name": "providers entry unreadable",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "limits",
+            "providers"
+          ],
+          "value": [
+            "nope"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G8",
+        "code": "G8_PROVIDERS_UNREADABLE"
+      }
+    },
+    {
+      "guard": "G8",
+      "name": "provider not checksummed",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "provider"
+          ],
+          "value": "eip155:31337:0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G8",
+        "code": "G8_PROVIDER_INVALID"
+      }
+    },
+    {
+      "guard": "G9",
+      "name": "seq 1 passes",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "seq"
+          ],
+          "value": "1"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G9",
+      "name": "seq 2^53-1 passes",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "seq"
+          ],
+          "value": "9007199254740991"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G9",
+      "name": "seq 2^53",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "seq"
+          ],
+          "value": "9007199254740992"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G9",
+        "code": "G9_SEQ"
+      }
+    },
+    {
+      "guard": "G9",
+      "name": "seq 2^64-1",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "seq"
+          ],
+          "value": "18446744073709551615"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G9",
+        "code": "G9_SEQ"
+      }
+    },
+    {
+      "guard": "G9",
+      "name": "seq 0",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "seq"
+          ],
+          "value": "0"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G9",
+        "code": "G9_SEQ"
+      }
+    },
+    {
+      "guard": "G9",
+      "name": "seq as a JSON number",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "seq"
+          ],
+          "value": 42
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G9",
+        "code": "G9_SEQ"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "resource of 2048 characters",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "op": "set",
+          "path": [
+            "forwardedCall",
+            "tool"
+          ],
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource of 1511 code points (3011 UTF-16 units) passes G10",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "resource of 2049 code points, astral",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_RESOURCE"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "maxTimeoutSeconds 1",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "maxTimeoutSeconds"
+          ],
+          "value": 1
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "requestHash in upper-case hex",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "requestHash"
+          ],
+          "value": "sha256:3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "requestHash 63 hex",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "requestHash"
+          ],
+          "value": "sha256:3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_REQUEST_HASH"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "requestHash without sha256:",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "requestHash"
+          ],
+          "value": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_REQUEST_HASH"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "resource empty",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": ""
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_RESOURCE"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "resource of 2049 characters",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_RESOURCE"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "maxTimeoutSeconds 301",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "maxTimeoutSeconds"
+          ],
+          "value": 301
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_MAX_TIMEOUT"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "maxTimeoutSeconds 0",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "maxTimeoutSeconds"
+          ],
+          "value": 0
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_MAX_TIMEOUT"
+      }
+    },
+    {
+      "guard": "G10",
+      "name": "maxTimeoutSeconds not an integer",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "maxTimeoutSeconds"
+          ],
+          "value": 1.5
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G10",
+        "code": "G10_MAX_TIMEOUT"
+      }
+    },
+    {
+      "guard": "G11",
+      "name": "url in paidUrls",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "canonicalUrl"
+          ],
+          "value": "https://mcp.goassay.ai/c/weather"
+        },
+        {
+          "op": "set",
+          "path": [
+            "paidUrls"
+          ],
+          "value": [
+            "https://mcp.goassay.ai/",
+            "https://mcp.goassay.ai/c/weather"
+          ]
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G11",
+      "name": "url not in paidUrls",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "canonicalUrl"
+          ],
+          "value": "https://mcp.goassay.ai/c/weather"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G11",
+        "code": "G11_URL_NOT_PAID"
+      }
+    },
+    {
+      "guard": "G11",
+      "name": "paidUrls empty",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "paidUrls"
+          ],
+          "value": []
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G11",
+        "code": "G11_URL_NOT_PAID"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is the forwarded tool",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/get_tool"
+        },
+        {
+          "op": "set",
+          "path": [
+            "forwardedCall",
+            "tool"
+          ],
+          "value": "get_tool"
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is another tool",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/some_other_tool"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_OTHER_TOOL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is the tool in another case",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/Weather_forecast"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_OTHER_TOOL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource with ..",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/../escrow"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource with a trailing slash",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/weather_forecast/"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource percent-encoded",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/weather%5Fforecast"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource with a non-ASCII name",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/wéather"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource with an upper-case prefix",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/MCP/tools/weather_forecast"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is a debt endpoint",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/escrow/debts/settle"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_DEBT_OR_SEQ_ENDPOINT"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is next-seq under the API prefix",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/api/v1/escrow/next-seq"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_DEBT_OR_SEQ_ENDPOINT"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is a debt endpoint in mixed case",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/ESCROW/Debts"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_DEBT_OR_SEQ_ENDPOINT"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is a percent-encoded debt endpoint",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/escrow%2Fdebts/x"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_DEBT_OR_SEQ_ENDPOINT"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource is another endpoint",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/agents/me/delegate"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource has a sub-path",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/a/b"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    },
+    {
+      "guard": "G12",
+      "name": "resource has a query",
+      "changes": [
+        {
+          "op": "set",
+          "path": [
+            "requirement",
+            "resource"
+          ],
+          "value": "/mcp/tools/a?x=1"
+        }
+      ],
+      "expect": {
+        "ok": false,
+        "guard": "G12",
+        "code": "G12_NOT_A_TOOL_CALL"
+      }
+    }
+  ]
+}

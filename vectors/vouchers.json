@@ -1,0 +1,334 @@
+{
+  "description": "Rail-B vouchers: requirement + issuedAt -> wire voucher, EIP-712 typed data (integers as decimal strings), digest, and the test key's signature. Chain id, escrow and asset are placeholders; digests and signatures are computed with viem and reproduced independently with eth-account.",
+  "testKey": {
+    "label": "TEST ONLY. The well-known anvil/hardhat default account 0. Public; never fund it or use it for anything real.",
+    "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  },
+  "cases": [
+    {
+      "name": "placeholder-escrow",
+      "note": "A second placeholder escrow 0x1111..., with payer 0x3333... and provider 0x4444....",
+      "network": {
+        "caip2": "eip155:31337",
+        "escrow": "eip155:31337:0x1111111111111111111111111111111111111111",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "requirement": {
+        "rail": "B",
+        "scheme": "voucher",
+        "network": "eip155:31337",
+        "payer": "eip155:31337:0x3333333333333333333333333333333333333333",
+        "payTo": "eip155:31337:0x1111111111111111111111111111111111111111",
+        "provider": "eip155:31337:0x4444444444444444444444444444444444444444",
+        "providerId": "00000000-0000-4000-8000-000000000001",
+        "amount": {
+          "amount": "1000000",
+          "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+          "decimals": 6
+        },
+        "resource": "https://api.platform.io/tools/search_web",
+        "requestHash": "sha256:ec849310fdfbd01cd6e67b7485481cd199b3e9a2df2f81011f5961e64b06b869",
+        "seq": "42",
+        "maxTimeoutSeconds": 100,
+        "signers": [
+          "payer",
+          "delegate"
+        ],
+        "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "issuedAt": 1785999800,
+      "wire": {
+        "payer": "eip155:31337:0x3333333333333333333333333333333333333333",
+        "payTo": "eip155:31337:0x1111111111111111111111111111111111111111",
+        "provider": "eip155:31337:0x4444444444444444444444444444444444444444",
+        "amount": {
+          "amount": "1000000",
+          "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+          "decimals": 6
+        },
+        "resource": "https://api.platform.io/tools/search_web",
+        "requestHash": "sha256:ec849310fdfbd01cd6e67b7485481cd199b3e9a2df2f81011f5961e64b06b869",
+        "seq": "42",
+        "issuedAt": 1785999800,
+        "expiresAt": 1785999900
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 31337,
+          "verifyingContract": "0x1111111111111111111111111111111111111111"
+        },
+        "types": {
+          "Voucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint64"
+            },
+            {
+              "name": "resourceHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "requestHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "seq",
+              "type": "uint64"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "Voucher",
+        "message": {
+          "payer": "0x3333333333333333333333333333333333333333",
+          "provider": "0x4444444444444444444444444444444444444444",
+          "amount": "1000000",
+          "resourceHash": "0x2bff49e6e926b3c1843a35b08926096e074efdef23c6e6ae8d00391783e7dc72",
+          "requestHash": "0xec849310fdfbd01cd6e67b7485481cd199b3e9a2df2f81011f5961e64b06b869",
+          "seq": "42",
+          "issuedAt": "1785999800",
+          "expiresAt": "1785999900"
+        }
+      },
+      "domainSeparator": "0x704e34473bd2d1e5eb97e894e898e97ee951b42b77f2edca45df066faf6ba4f2",
+      "structHash": "0x3536ef72ffdce64157b64e42d4869842e074a6c08b0beac06b3409c57d468d61",
+      "digest": "0x702b67b3f3e249d5242af94da047803484ff84d24cf95bbc80b297cde8ea51e3",
+      "signature": "0x15f0983c25d2b21d533a7fa573a7d44478356d7bb77a7ed7495a0be0102246d03730433957b0a2173e76ba47170a4122cd015d377ae3a0551606b134bd9b60c41c"
+    },
+    {
+      "name": "built-in-escrow",
+      "note": "The placeholder escrow 0xE5c0... and asset 0xA55E...; maxTimeoutSeconds 300, so the lifetime is the 240 s default.",
+      "network": {
+        "caip2": "eip155:31337",
+        "escrow": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "requirement": {
+        "rail": "B",
+        "scheme": "voucher",
+        "network": "eip155:31337",
+        "payer": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "providerId": "00000000-0000-4000-8000-000000000001",
+        "amount": {
+          "amount": "100000",
+          "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+          "decimals": 6
+        },
+        "resource": "https://mcp.example.com/tools/get_weather",
+        "requestHash": "sha256:5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f",
+        "seq": "7",
+        "maxTimeoutSeconds": 300,
+        "signers": [
+          "payer",
+          "delegate"
+        ],
+        "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "issuedAt": 1786000000,
+      "wire": {
+        "payer": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "amount": {
+          "amount": "100000",
+          "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+          "decimals": 6
+        },
+        "resource": "https://mcp.example.com/tools/get_weather",
+        "requestHash": "sha256:5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f",
+        "seq": "7",
+        "issuedAt": 1786000000,
+        "expiresAt": 1786000240
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 31337,
+          "verifyingContract": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+        },
+        "types": {
+          "Voucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint64"
+            },
+            {
+              "name": "resourceHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "requestHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "seq",
+              "type": "uint64"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "Voucher",
+        "message": {
+          "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+          "amount": "100000",
+          "resourceHash": "0xd3f3d7214ead11b675c1d6ec3d58986fb87249ca16df797d1b7272536858c662",
+          "requestHash": "0x5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f",
+          "seq": "7",
+          "issuedAt": "1786000000",
+          "expiresAt": "1786000240"
+        }
+      },
+      "domainSeparator": "0xa5d35afd2d19d04217c8970bd51578492270fb9cf1dfd2609202d6e130c75b17",
+      "structHash": "0xbffa904d3a77124016e6349f6b23c26390cc22a1eba9da2fd85fe1da18833bc6",
+      "digest": "0xc8e4766b3b9c61a788a30bbf65711d9a9b62775a4629362f13d44db1a09fe2aa",
+      "signature": "0x5e7687a26c0195fecef891901b499bbc727d845a64a7f3b3d4d9a9adec23cee51feb61eddeb07e92c508a0cdea6a94f81832aef7f01c7f347184015c8ce41e301b"
+    },
+    {
+      "name": "short-timeout-utf8-max-safe-seq",
+      "note": "maxTimeoutSeconds 60 caps the lifetime; a non-ASCII resource is hashed as UTF-8; seq is 2^53-1; requestHash in upper case is signed as the same bytes.",
+      "network": {
+        "caip2": "eip155:31337",
+        "escrow": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "requirement": {
+        "rail": "B",
+        "scheme": "voucher",
+        "network": "eip155:31337",
+        "payer": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "providerId": "00000000-0000-4000-8000-000000000001",
+        "amount": {
+          "amount": "18446744073709551615",
+          "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+          "decimals": 6
+        },
+        "resource": "https://mcp.example.com/tools/café?q=ü☃",
+        "requestHash": "sha256:ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+        "seq": "9007199254740991",
+        "maxTimeoutSeconds": 60,
+        "signers": [
+          "payer",
+          "delegate"
+        ],
+        "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "issuedAt": 1786000123,
+      "wire": {
+        "payer": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "amount": {
+          "amount": "18446744073709551615",
+          "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+          "decimals": 6
+        },
+        "resource": "https://mcp.example.com/tools/café?q=ü☃",
+        "requestHash": "sha256:ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+        "seq": "9007199254740991",
+        "issuedAt": 1786000123,
+        "expiresAt": 1786000183
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 31337,
+          "verifyingContract": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+        },
+        "types": {
+          "Voucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint64"
+            },
+            {
+              "name": "resourceHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "requestHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "seq",
+              "type": "uint64"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "Voucher",
+        "message": {
+          "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+          "amount": "18446744073709551615",
+          "resourceHash": "0xdfad342312cbd6f041236a446f998ee58f299cf1abf5de360f8dd0fc509ab37a",
+          "requestHash": "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+          "seq": "9007199254740991",
+          "issuedAt": "1786000123",
+          "expiresAt": "1786000183"
+        }
+      },
+      "domainSeparator": "0xa5d35afd2d19d04217c8970bd51578492270fb9cf1dfd2609202d6e130c75b17",
+      "structHash": "0x99cd0ad11c8bfb21b9c4e1804b8f45e0fc1bcb9794ccfc64ef37e11e277ad375",
+      "digest": "0xded1926affa55e4f207e7a63e6bbffbf70e2e3b1428a7d3395eef526e4e39049",
+      "signature": "0xb400f6441fdd96695223bfb34d780d50fea29d81287977593dcb8901850d4abf4635d14afe01fcd2387bd0d987aa59d76fe50639c71bc961b66f9a462ff86bdd1c"
+    }
+  ]
+}

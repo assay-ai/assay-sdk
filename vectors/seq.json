@@ -1,0 +1,76 @@
+{
+  "description": "G9: 1 <= seq < 2^53, seq a canonical decimal string. Each case sets requirement.seq in guards.json 'base'; ok false means the guards refuse with guard G9, code G9_SEQ.",
+  "cases": [
+    {
+      "seq": "1",
+      "ok": true
+    },
+    {
+      "seq": "42",
+      "ok": true
+    },
+    {
+      "seq": "9007199254740991",
+      "ok": true,
+      "note": "2^53 - 1"
+    },
+    {
+      "seq": "9007199254740992",
+      "ok": false,
+      "note": "2^53"
+    },
+    {
+      "seq": "9007199254740993",
+      "ok": false,
+      "note": "2^53 + 1"
+    },
+    {
+      "seq": "18446744073709551615",
+      "ok": false,
+      "note": "2^64 - 1"
+    },
+    {
+      "seq": "18446744073709551616",
+      "ok": false,
+      "note": "2^64"
+    },
+    {
+      "seq": "0",
+      "ok": false
+    },
+    {
+      "seq": "-1",
+      "ok": false
+    },
+    {
+      "seq": "01",
+      "ok": false,
+      "note": "leading zero"
+    },
+    {
+      "seq": "1.0",
+      "ok": false
+    },
+    {
+      "seq": "1e3",
+      "ok": false
+    },
+    {
+      "seq": " 1",
+      "ok": false
+    },
+    {
+      "seq": "",
+      "ok": false
+    },
+    {
+      "seq": 1,
+      "ok": false,
+      "note": "a JSON number, not a decimal string"
+    },
+    {
+      "seq": null,
+      "ok": false
+    }
+  ]
+}

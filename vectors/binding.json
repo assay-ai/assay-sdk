@@ -1,0 +1,445 @@
+{
+  "description": "DelegateBinding challenges in the server's wire form (spec/protocol.md section 5). 'valid' cases are accepted under 'context' and give 'typedData' (integers as decimal strings), 'digest' and the test key's 'signature'; each 'invalid' case applies one change to valid[0].challenge ('set' path=value, or 'delete' path) and must be refused naming 'field'.",
+  "testKey": {
+    "label": "TEST ONLY. The well-known anvil/hardhat default account 0. Public; never fund it or use it for anything real.",
+    "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  },
+  "context": {
+    "environment": "production",
+    "network": "eip155:31337",
+    "localAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "credentialId": "5b8f3c1e-2a4d-4e6f-9a1b-3c5d7e9f0a2b",
+    "nowSeconds": 1785999800
+  },
+  "valid": [
+    {
+      "name": "server-ttl-300s",
+      "challenge": {
+        "challengeId": "0d6c2e4a-8b1f-4c3d-9e5a-7f2b4c6d8e01",
+        "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "expiresAt": "2026-08-06T07:08:20.000Z",
+        "typedData": {
+          "domain": {
+            "name": "GoAssay Agent Binding",
+            "version": "1",
+            "chainId": "31337"
+          },
+          "types": {
+            "DelegateBinding": [
+              {
+                "name": "delegate",
+                "type": "address"
+              },
+              {
+                "name": "credentialId",
+                "type": "string"
+              },
+              {
+                "name": "nonce",
+                "type": "string"
+              },
+              {
+                "name": "expiresAt",
+                "type": "uint64"
+              }
+            ]
+          },
+          "primaryType": "DelegateBinding",
+          "message": {
+            "delegate": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "credentialId": "5b8f3c1e-2a4d-4e6f-9a1b-3c5d7e9f0a2b",
+            "nonce": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+            "expiresAt": "1786000100"
+          }
+        }
+      },
+      "typedData": {
+        "domain": {
+          "name": "GoAssay Agent Binding",
+          "version": "1",
+          "chainId": 31337
+        },
+        "types": {
+          "DelegateBinding": [
+            {
+              "name": "delegate",
+              "type": "address"
+            },
+            {
+              "name": "credentialId",
+              "type": "string"
+            },
+            {
+              "name": "nonce",
+              "type": "string"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "DelegateBinding",
+        "message": {
+          "delegate": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "credentialId": "5b8f3c1e-2a4d-4e6f-9a1b-3c5d7e9f0a2b",
+          "nonce": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "expiresAt": "1786000100"
+        }
+      },
+      "digest": "0x324d7873569ffb4281e85c504312d28523dc647af7055fae5ef9d5c016533f55",
+      "signature": "0xd96f7ac681cc3c95c0aacfb610de66d6f5665239ed7cd923e14b1c81e44518973bcb114bc81395d64fc86a4146eefd228464fa55068b3ea378b9f68fcbcb386b1b"
+    },
+    {
+      "name": "expires-in-1s",
+      "challenge": {
+        "challengeId": "0d6c2e4a-8b1f-4c3d-9e5a-7f2b4c6d8e01",
+        "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "expiresAt": "2026-08-06T07:03:21.000Z",
+        "typedData": {
+          "domain": {
+            "name": "GoAssay Agent Binding",
+            "version": "1",
+            "chainId": "31337"
+          },
+          "types": {
+            "DelegateBinding": [
+              {
+                "name": "delegate",
+                "type": "address"
+              },
+              {
+                "name": "credentialId",
+                "type": "string"
+              },
+              {
+                "name": "nonce",
+                "type": "string"
+              },
+              {
+                "name": "expiresAt",
+                "type": "uint64"
+              }
+            ]
+          },
+          "primaryType": "DelegateBinding",
+          "message": {
+            "delegate": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "credentialId": "5b8f3c1e-2a4d-4e6f-9a1b-3c5d7e9f0a2b",
+            "nonce": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+            "expiresAt": "1785999801"
+          }
+        }
+      },
+      "typedData": {
+        "domain": {
+          "name": "GoAssay Agent Binding",
+          "version": "1",
+          "chainId": 31337
+        },
+        "types": {
+          "DelegateBinding": [
+            {
+              "name": "delegate",
+              "type": "address"
+            },
+            {
+              "name": "credentialId",
+              "type": "string"
+            },
+            {
+              "name": "nonce",
+              "type": "string"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "DelegateBinding",
+        "message": {
+          "delegate": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "credentialId": "5b8f3c1e-2a4d-4e6f-9a1b-3c5d7e9f0a2b",
+          "nonce": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "expiresAt": "1785999801"
+        }
+      },
+      "digest": "0xa6fbc05c067e0b81163af3f84a03cbe024a9cc23b84a4bdfca6efa330db59363",
+      "signature": "0x630b1822ebedb1a89184e9608263dc3e199f020b9bbce1f45384d159a16208026be5edf21d343ac7ad5eec80ec2f0ca623e323f1227c7324a2274279e2d7b6561c"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "domain.name",
+      "field": "domain.name",
+      "op": "set",
+      "path": [
+        "typedData",
+        "domain",
+        "name"
+      ],
+      "value": "Assay Settlement"
+    },
+    {
+      "name": "domain.version",
+      "field": "domain.version",
+      "op": "set",
+      "path": [
+        "typedData",
+        "domain",
+        "version"
+      ],
+      "value": "2"
+    },
+    {
+      "name": "verifyingContract present",
+      "field": "domain.verifyingContract",
+      "op": "set",
+      "path": [
+        "typedData",
+        "domain",
+        "verifyingContract"
+      ],
+      "value": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+    },
+    {
+      "name": "salt present",
+      "field": "domain.salt",
+      "op": "set",
+      "path": [
+        "typedData",
+        "domain",
+        "salt"
+      ],
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "domain.chainId of another chain",
+      "field": "domain.chainId",
+      "op": "set",
+      "path": [
+        "typedData",
+        "domain",
+        "chainId"
+      ],
+      "value": "1"
+    },
+    {
+      "name": "domain.chainId missing",
+      "field": "domain.chainId",
+      "op": "delete",
+      "path": [
+        "typedData",
+        "domain",
+        "chainId"
+      ]
+    },
+    {
+      "name": "primaryType",
+      "field": "primaryType",
+      "op": "set",
+      "path": [
+        "typedData",
+        "primaryType"
+      ],
+      "value": "Voucher"
+    },
+    {
+      "name": "extra type",
+      "field": "types.Voucher",
+      "op": "set",
+      "path": [
+        "typedData",
+        "types",
+        "Voucher"
+      ],
+      "value": [
+        {
+          "name": "payer",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "EIP712Domain type supplied",
+      "field": "types.EIP712Domain",
+      "op": "set",
+      "path": [
+        "typedData",
+        "types",
+        "EIP712Domain"
+      ],
+      "value": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "field order",
+      "field": "types.DelegateBinding",
+      "op": "set",
+      "path": [
+        "typedData",
+        "types",
+        "DelegateBinding"
+      ],
+      "value": [
+        {
+          "name": "credentialId",
+          "type": "string"
+        },
+        {
+          "name": "delegate",
+          "type": "address"
+        },
+        {
+          "name": "nonce",
+          "type": "string"
+        },
+        {
+          "name": "expiresAt",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "field type",
+      "field": "types.DelegateBinding",
+      "op": "set",
+      "path": [
+        "typedData",
+        "types",
+        "DelegateBinding",
+        3,
+        "type"
+      ],
+      "value": "uint256"
+    },
+    {
+      "name": "extra field",
+      "field": "types.DelegateBinding",
+      "op": "set",
+      "path": [
+        "typedData",
+        "types",
+        "DelegateBinding",
+        4
+      ],
+      "value": {
+        "name": "amount",
+        "type": "uint64"
+      }
+    },
+    {
+      "name": "message.delegate is another key",
+      "field": "message.delegate",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "delegate"
+      ],
+      "value": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    },
+    {
+      "name": "message.delegate not an address",
+      "field": "message.delegate",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "delegate"
+      ],
+      "value": "0x1234"
+    },
+    {
+      "name": "message.credentialId of another credential",
+      "field": "message.credentialId",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "credentialId"
+      ],
+      "value": "9e7d5c3b-1a2f-4e6d-8c0b-2a4f6e8d0c1b"
+    },
+    {
+      "name": "message.nonce empty",
+      "field": "message.nonce",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "nonce"
+      ],
+      "value": ""
+    },
+    {
+      "name": "extra message field",
+      "field": "message.amount",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "amount"
+      ],
+      "value": "1"
+    },
+    {
+      "name": "expiresAt = now + 301",
+      "field": "message.expiresAt",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "expiresAt"
+      ],
+      "value": "1786000101"
+    },
+    {
+      "name": "expiresAt = now",
+      "field": "message.expiresAt",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "expiresAt"
+      ],
+      "value": "1785999800"
+    },
+    {
+      "name": "expiresAt in the past",
+      "field": "message.expiresAt",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "expiresAt"
+      ],
+      "value": "1785999790"
+    },
+    {
+      "name": "expiresAt not an integer",
+      "field": "message.expiresAt",
+      "op": "set",
+      "path": [
+        "typedData",
+        "message",
+        "expiresAt"
+      ],
+      "value": "1785999900.5"
+    },
+    {
+      "name": "typedData missing",
+      "field": "typedData",
+      "op": "delete",
+      "path": [
+        "typedData"
+      ]
+    }
+  ]
+}
