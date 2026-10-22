@@ -184,7 +184,7 @@ describe("paid call", () => {
   });
 
   it("a requirement for a network no signer serves is PaymentSchemeUnsupportedError naming it", async () => {
-    const network = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+    const network = "solana:placeholder";
     const { client, signTypedData } = fakeClient({ mcp: () => paymentRequired({ ...BASE.requirement, network }) });
     const err = await client.tools.call(TOOL, {}).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PaymentSchemeUnsupportedError);

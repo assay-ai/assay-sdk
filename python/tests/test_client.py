@@ -161,7 +161,7 @@ def test_payment_required_without_signer() -> None:
 
 
 def test_network_mismatch_names_the_network() -> None:
-    network = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+    network = "solana:placeholder"
     fake = Fake(mcp=lambda p, s: payment_required({**BASE["requirement"], "network": network}))
     with pytest.raises(PaymentSchemeUnsupportedError) as err:
         fake.client().tools.call(TOOL, {})
