@@ -7,7 +7,9 @@ as the nearest class (or ``AssayError`` itself)::
     AssayError
     ├─ ConfigError                       local setup (missing API key, bad option)
     ├─ AuthError                         401, or an AUTH_* refusal
-    │   └─ ScopeMissingError             403 AUTH_SCOPE_MISSING (.required_scope)
+    │   ├─ ScopeMissingError             403 AUTH_SCOPE_MISSING (.required_scope)
+    │   └─ HumanSessionRequiredError     403 AUTH_HUMAN_SESSION_REQUIRED: only a signed-in person may do this
+    ├─ DelegateAlreadyBoundError         409 ACCOUNT_DELEGATE_ALREADY_BOUND: the key is bound to another API key
     ├─ PaymentError                      a PAYMENT_* refusal from the server
     │   ├─ PaymentRequiredError          the tool is paid and no signer was given (.requirement)
     │   ├─ PaymentSchemeUnsupportedError no signer for the requirement's network (.network)
@@ -67,6 +69,21 @@ class ScopeMissingError(AuthError):
         kw.setdefault("status", 403)
         super().__init__("AUTH_SCOPE_MISSING", message, **kw)
         self.required_scope = required_scope
+
+
+class HumanSessionRequiredError(AuthError):
+    def __init__(self, message: str, **kw: Any) -> None:
+        kw.setdefault("status", 403)
+        super().__init__("AUTH_HUMAN_SESSION_REQUIRED", message, **kw)
+
+
+class DelegateAlreadyBoundError(AssayError):
+    """The payment key is already bound (or waiting for approval) on another live API key; nothing
+    was bound. Use a key of this agent's own, or revoke the other API key first."""
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        kw.setdefault("status", 409)
+        super().__init__("ACCOUNT_DELEGATE_ALREADY_BOUND", message, **kw)
 
 
 class PaymentError(AssayError):
@@ -145,6 +162,10 @@ def error_from_server(
     if c == "AUTH_SCOPE_MISSING":
         scope = (details or {}).get("requiredScope")
         return ScopeMissingError(message, required_scope=scope if isinstance(scope, str) else None, **kw)
+    if c == "AUTH_HUMAN_SESSION_REQUIRED":
+        return HumanSessionRequiredError(message, **kw)
+    if c == "ACCOUNT_DELEGATE_ALREADY_BOUND":
+        return DelegateAlreadyBoundError(message, **kw)
     if c in _RATE_LIMIT_CODES or status == 429:
         return RateLimitError(c, message, retry_after=retry_after, **kw)
     if c.startswith("AUTH_") or status == 401:

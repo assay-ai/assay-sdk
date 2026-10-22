@@ -19,10 +19,14 @@ export interface PaidCallsStatus {
    */
   state: PaidCallsState;
   credentialId: string;
-  /** The bound key's `0x` address, or null. */
+  /** The bound key's `0x` address, or null. While a new key waits for approval, still the old key. */
   delegate: string | null;
+  /** When `delegate` was bound (ISO 8601), or null. */
+  boundAt: string | null;
   /** A key waiting for approval to replace `delegate`, or null. */
   pendingDelegate: string | null;
+  /** When `pendingDelegate` was proved (ISO 8601), or null. */
+  pendingSince: string | null;
   /** The on-chain caps of the bound key, in atomic units, when the server read them. */
   caps: {
     maxVoucherAmount: string | null;
@@ -40,8 +44,14 @@ export interface PaidCallsStatus {
 }
 
 export interface BindResult extends PaidCallsStatus {
-  /** The key was already bound: nothing was signed. */
+  /** The key was already bound (or already waiting for approval): nothing was signed. */
   alreadyBound: boolean;
+  /**
+   * - `ACTIVE`: this key is the bound key (`delegate`); a person still approves its caps on chain;
+   * - `PENDING_APPROVAL`: another key stays bound and keeps signing; this key is `pendingDelegate`
+   *   and replaces it once a person approves it at `approvalUrl`.
+   */
+  bindStatus: "ACTIVE" | "PENDING_APPROVAL";
 }
 
 export interface WaitOptions {
@@ -120,7 +130,9 @@ export class PaidCalls {
       state,
       credentialId: data.credentialId,
       delegate,
+      boundAt: str(data.boundAt),
       pendingDelegate: pending,
+      pendingSince: str(data.pendingSince),
       caps: paid
         ? {
             maxVoucherAmount: str(paid.maxVoucherAmount),
@@ -136,16 +148,18 @@ export class PaidCalls {
 
   /**
    * Binds this client's EVM signer to the API key: challenge, field check, sign, bind. A no-op
-   * when the key is already bound. A person then approves the key at `approvalUrl`, comparing the
-   * fingerprint. Needs the `payments` scope.
+   * when the key is already bound or already waiting. When another key is bound, this key waits as
+   * `pendingDelegate` (`bindStatus: "PENDING_APPROVAL"`) and the old key keeps signing until a
+   * person approves the new one at `approvalUrl`, comparing the fingerprint. Needs the `payments`
+   * scope. A key bound to another API key is refused with `DelegateAlreadyBoundError` (409).
    */
   async bind(options: { network?: string } = {}): Promise<BindResult> {
     const signer = this.#signer();
     if (signer === null) throw new ConfigError("bind() needs an eip155 signer");
+    const mine = getAddress(signer.address);
     const current = await this.status();
-    if (current.delegate === getAddress(signer.address) || current.pendingDelegate === getAddress(signer.address)) {
-      return { ...current, alreadyBound: true };
-    }
+    if (current.delegate === mine) return { ...current, alreadyBound: true, bindStatus: "ACTIVE" };
+    if (current.pendingDelegate === mine) return { ...current, alreadyBound: true, bindStatus: "PENDING_APPROVAL" };
     const evm = [...this.#c.networks.keys()].filter((n) => n.startsWith("eip155:"));
     const network = options.network ?? (evm.length === 1 ? evm[0] : undefined);
     const chainId = network === undefined || !this.#c.networks.has(network) ? null : eip155ChainId(network);
@@ -154,19 +168,32 @@ export class PaidCalls {
         throw new ConfigError("bind() needs `network` naming one of the eip155 networks");
       throw new PaymentNetworkUnknownError(network ?? "eip155");
     }
-    await bindEvmKey({ signer, chainId, credentialId: current.credentialId, api: this.#c.api, now: this.#c.now });
-    return { ...(await this.status()), alreadyBound: false };
+    const answer = await bindEvmKey({
+      signer,
+      chainId,
+      credentialId: current.credentialId,
+      api: this.#c.api,
+      now: this.#c.now,
+    });
+    const bindStatus = answer.status === "PENDING_APPROVAL" ? "PENDING_APPROVAL" : "ACTIVE";
+    return { ...(await this.status()), alreadyBound: false, bindStatus };
   }
 
-  /** Polls until a person approved the key: every 5 s for 2 minutes, then every 15 s. */
+  /**
+   * Polls until a person approved this client's key: `delegate` is this key and its paid calls are
+   * on. A key waiting to replace another one becomes `delegate` only when the approval lands.
+   * Every 5 s for 2 minutes, then every 15 s.
+   */
   async waitUntilActive(options: WaitOptions = {}): Promise<PaidCallsStatus> {
+    const signer = this.#signer();
+    const mine = signer ? getAddress(signer.address) : null;
     const started = this.#c.now();
     const until = started + (options.timeoutMs ?? 15 * 60_000);
     for (;;) {
       if (options.signal?.aborted) throw new AssayError("ABORTED", "the wait was aborted");
       try {
         const s = await this.status();
-        if (s.state === "active") return s;
+        if (s.state === "active" && (mine === null || s.delegate === mine)) return s;
       } catch (err) {
         if (!(err instanceof AssayError) || !err.retryable) throw err;
       }

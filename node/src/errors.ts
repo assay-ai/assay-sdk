@@ -7,7 +7,9 @@
  * AssayError
  * ├─ ConfigError                      local setup (missing API key, bad option)
  * ├─ AuthError                        401, or an AUTH_* refusal
- * │   └─ ScopeMissingError            403 AUTH_SCOPE_MISSING (.requiredScope)
+ * │   ├─ ScopeMissingError            403 AUTH_SCOPE_MISSING (.requiredScope)
+ * │   └─ HumanSessionRequiredError    403 AUTH_HUMAN_SESSION_REQUIRED: only a signed-in person may do this
+ * ├─ DelegateAlreadyBoundError        409 ACCOUNT_DELEGATE_ALREADY_BOUND: the key is bound to another API key
  * ├─ PaymentError                     a PAYMENT_* refusal from the server
  * │   ├─ PaymentRequiredError         the tool is paid and no signer was given (.requirement)
  * │   ├─ PaymentSchemeUnsupportedError no signer for the requirement's network (.network)
@@ -76,6 +78,24 @@ export class ScopeMissingError extends AuthError {
   constructor(message: string, init: AssayErrorInit & { requiredScope?: string } = {}) {
     super("AUTH_SCOPE_MISSING", message, { ...init, status: init.status ?? 403 });
     this.requiredScope = init.requiredScope;
+  }
+}
+
+export class HumanSessionRequiredError extends AuthError {
+  override name = "HumanSessionRequiredError";
+  constructor(message: string, init: AssayErrorInit = {}) {
+    super("AUTH_HUMAN_SESSION_REQUIRED", message, { ...init, status: init.status ?? 403 });
+  }
+}
+
+/**
+ * The payment key is already bound (or waiting for approval) on another live API key; nothing was
+ * bound. Use a key of this agent's own, or revoke the other API key first.
+ */
+export class DelegateAlreadyBoundError extends AssayError {
+  override name = "DelegateAlreadyBoundError";
+  constructor(message: string, init: AssayErrorInit = {}) {
+    super("ACCOUNT_DELEGATE_ALREADY_BOUND", message, { ...init, status: init.status ?? 409 });
   }
 }
 
@@ -173,6 +193,8 @@ export function errorFromServer(code: string | undefined, message: string, f: Se
     const scope = f.details?.requiredScope;
     return new ScopeMissingError(message, { ...f, ...(typeof scope === "string" ? { requiredScope: scope } : {}) });
   }
+  if (c === "AUTH_HUMAN_SESSION_REQUIRED") return new HumanSessionRequiredError(message, f);
+  if (c === "ACCOUNT_DELEGATE_ALREADY_BOUND") return new DelegateAlreadyBoundError(message, f);
   if (RATE_LIMIT_CODES.has(c) || f.status === 429) return new RateLimitError(c, message, f);
   if (c.startsWith("AUTH_") || f.status === 401) return new AuthError(c, message, f);
   if (c.startsWith("PAYMENT_")) return new PaymentError(c, message, f);

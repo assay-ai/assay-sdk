@@ -25,7 +25,8 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 | Web app (key approval) | `https://portal.goassay.ai` |
 
 - Every request carries `Authorization: Bearer <API key>`. The API key is created in the Assay web app for one agent.
-- Permissions live on the key as scopes. A request that needs a scope the key does not have is refused with HTTP `403` and error code `AUTH_SCOPE_MISSING`.
+- Permissions live on the key as scopes. A request that needs a scope the key does not have is refused with HTTP `403`, error code `AUTH_SCOPE_MISSING` and `error.context.requiredScope` naming the scope, in the REST envelope (section 2.2). On the MCP endpoint this refusal is a plain HTTP `403` with that REST envelope, sent before any JSON-RPC is read: a client MUST read a non-JSON-RPC answer as a REST error.
+- A route that changes the controls over an agent (its spend policy, its keys, where its alerts go) is refused to every API key with HTTP `403` and `AUTH_HUMAN_SESSION_REQUIRED`: only a person signed in to the web app may do it.
 
   | Scope | Allows |
   |---|---|
@@ -152,13 +153,34 @@ The EIP-712 domain type is `EIP712Domain(string name,string version,uint256 chai
 
 ### 5.3 Bind
 
-`POST {api}/agents/me/delegate` with body `{"challengeId": "<uuid>", "signature": "<0x 65-byte signature>"}`. The answer's `data.delegate` MUST name the client's key (CAIP-10 on the configured chain); otherwise the client treats the bind as failed. A `409` with code `ACCOUNT_DELEGATE_ALREADY_BOUND` means the key is bound to another live credential.
+`POST {api}/agents/me/delegate` with body `{"challengeId": "<uuid>", "signature": "<0x 65-byte signature>"}` answers:
 
-`GET {api}/agents/me/delegate` reads the current binding and its paid-call status.
+```json
+{
+  "data": {
+    "credentialId": "<uuid>",
+    "status": "ACTIVE | PENDING_APPROVAL",
+    "delegate": "eip155:<chainId>:<address> | null",
+    "boundAt": "<ISO 8601> | null",
+    "pendingDelegate": "eip155:<chainId>:<address> | null",
+    "pendingSince": "<ISO 8601> | null",
+    "approvalUrl": "<url> | null"
+  }
+}
+```
+
+- `ACTIVE`: no other key was bound; the client's key is `delegate` now. `data.delegate` MUST name the client's key (CAIP-10 on the configured chain).
+- `PENDING_APPROVAL`: another key is bound and stays bound: it keeps signing, and `delegate` still names it. The client's key waits as `pendingDelegate`, which MUST name the client's key. It replaces `delegate` in one step when the person's on-chain approval (section 5.4) lands. A new key never silently replaces a bound one.
+- Any other answer: the client treats the bind as failed.
+- A `409` with code `ACCOUNT_DELEGATE_ALREADY_BOUND` means the key is bound (or pending) on another live credential; nothing was bound.
+
+Binding needs the `payments` scope.
+
+`GET {api}/agents/me/delegate` reads the current binding with the same fields (without `status`), plus `paidCalls` (the bound key's on-chain status: `NONE`, `ACTIVE` or `EXPIRED`, and its caps) and `paidCallsUnknown` (the chain could not be read just now). Paid calls are on for the client's key when `delegate` names it and `paidCalls.status` is `ACTIVE`. A client waiting for approval polls this route until then; while its key is `pendingDelegate`, the old key's `ACTIVE` status is not its own.
 
 ### 5.4 Approval
 
-A person approves the bound key in the Assay web app, at:
+A person approves the bound key (or the pending key, when one waits) in the Assay web app, at:
 
 ```
 {web origin}/agents/enable-paid?credential=<credential id>#key=<checksummed address>
@@ -343,7 +365,9 @@ Codes a client must know for this flow:
 | `MCP_QUOTA_EXCEEDED` | The free quota is used up | yes, later |
 | `MCP_VELOCITY_LIMIT_EXCEEDED` | Too many calls in a short window | yes, later |
 | `RATE_LIMITED` | Request rate limit; carries `retryAfterMs` | yes, after `retryAfterMs` |
-| `AUTH_SCOPE_MISSING` | The API key lacks a scope (HTTP 403) | no |
+| `AUTH_SCOPE_MISSING` | The API key lacks a scope (HTTP 403); `context.requiredScope` names it | no |
+| `AUTH_HUMAN_SESSION_REQUIRED` | Only a signed-in person may do this, never an API key (HTTP 403) | no |
+| `ACCOUNT_DELEGATE_ALREADY_BOUND` | The payment key is bound to another live credential (HTTP 409) | no |
 
 A full, machine-readable code catalog will be published as `spec/errors.json`.
 

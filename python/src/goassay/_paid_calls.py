@@ -33,8 +33,9 @@ class PaidCallsStatus:
     ``unknown`` (Assay could not read the key's grant from the chain just now; ask again)."""
     credential_id: str
     delegate: str | None
-    """The bound key's ``0x`` address."""
+    """The bound key's ``0x`` address. While a new key waits for approval, still the old key."""
     pending_delegate: str | None
+    """A key waiting for approval to replace ``delegate``."""
     caps: dict[str, str | None] | None
     """On-chain caps of the bound key in atomic units, when the server read them."""
     approval_url: str | None
@@ -42,8 +43,16 @@ class PaidCallsStatus:
     The key travels only in the fragment. ``None`` without a signer."""
     fingerprint: str | None
     """This client's key as the approval page shows it (``1A2B 9F3C``)."""
+    bound_at: str | None = None
+    """When ``delegate`` was bound (ISO 8601)."""
+    pending_since: str | None = None
+    """When ``pending_delegate`` was proved (ISO 8601)."""
     already_bound: bool = False
-    """From ``bind()``: the key was already bound and nothing was signed."""
+    """From ``bind()``: the key was already bound (or already waiting) and nothing was signed."""
+    bind_status: Literal["ACTIVE", "PENDING_APPROVAL"] | None = None
+    """From ``bind()``: ``ACTIVE`` when this key is the bound key (a person still approves its caps
+    on chain); ``PENDING_APPROVAL`` when another key stays bound and keeps signing until a person
+    approves this one at ``approval_url``. ``None`` from ``status()``."""
 
 
 def _address(caip10: object) -> str | None:
@@ -119,6 +128,8 @@ def status(c: Context) -> Flow[PaidCallsStatus]:
         credential_id=data["credentialId"],
         delegate=delegate,
         pending_delegate=pending,
+        bound_at=s(data.get("boundAt")),
+        pending_since=s(data.get("pendingSince")),
         caps=caps,
         approval_url=approval_link(c.web_origin, data.get("approvalUrl"), data["credentialId"], mine),
         fingerprint=fingerprint(mine) if mine else None,
@@ -131,8 +142,10 @@ def bind(c: Context, network: str | None) -> Flow[PaidCallsStatus]:
         raise ConfigError("bind() needs an eip155 signer")
     current = yield from status(c)
     mine = to_checksum_address(signer.address)
-    if mine in (current.delegate, current.pending_delegate):
-        return replace(current, already_bound=True)
+    if current.delegate == mine:
+        return replace(current, already_bound=True, bind_status="ACTIVE")
+    if current.pending_delegate == mine:
+        return replace(current, already_bound=True, bind_status="PENDING_APPROVAL")
     evm = [n for n in c.networks if n.startswith("eip155:")]
     nid = network if network is not None else (evm[0] if len(evm) == 1 else None)
     chain_id = eip155_chain_id(nid) if nid is not None and nid in c.networks else None
@@ -140,21 +153,26 @@ def bind(c: Context, network: str | None) -> Flow[PaidCallsStatus]:
         if nid is None and len(evm) > 1:
             raise ConfigError("bind() needs `network` naming one of the eip155 networks")
         raise PaymentNetworkUnknownError(nid or "eip155")
-    yield from bind_evm_key(
+    answer = yield from bind_evm_key(
         signer=signer, chain_id=chain_id, credential_id=current.credential_id, rest=c.rest, now=c.now
     )
     after = yield from status(c)
-    return after
+    pending = answer.get("status") == "PENDING_APPROVAL"
+    return replace(after, bind_status="PENDING_APPROVAL" if pending else "ACTIVE")
 
 
 def wait_until_active(c: Context, timeout: float) -> Flow[PaidCallsStatus]:
-    """Polls until a person approved the key: every 5 s for 2 minutes, then every 15 s."""
+    """Polls until a person approved this client's key: ``delegate`` is this key and its paid calls
+    are on. A key waiting to replace another one becomes ``delegate`` only when the approval lands.
+    Every 5 s for 2 minutes, then every 15 s."""
+    signer = _signer(c)
+    mine = to_checksum_address(signer.address) if signer else None
     started = c.now()
     until = started + timeout
     while True:
         try:
             s = yield from status(c)
-            if s.state == "active":
+            if s.state == "active" and mine in (None, s.delegate):
                 return s
         except AssayError as err:
             if not err.retryable:
@@ -174,8 +192,12 @@ class PaidCalls:
         return self._c._run(status(self._c._ctx))
 
     def bind(self, *, network: str | None = None) -> PaidCallsStatus:
-        """Binds this client's EVM signer to the API key; a no-op when it is bound already.
-        A person then approves the key at ``approval_url``, comparing the fingerprint."""
+        """Binds this client's EVM signer to the API key; a no-op when it is bound or waiting already.
+
+        When another key is bound, this key waits as ``pending_delegate`` (``bind_status ==
+        "PENDING_APPROVAL"``) and the old key keeps signing until a person approves the new one at
+        ``approval_url``, comparing the fingerprint. Needs the ``payments`` scope. A key bound to
+        another API key is refused with ``DelegateAlreadyBoundError`` (409)."""
         return self._c._run(bind(self._c._ctx, network))
 
     def wait_until_active(self, *, timeout: float = 900.0) -> PaidCallsStatus:

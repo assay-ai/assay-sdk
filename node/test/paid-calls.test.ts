@@ -1,6 +1,6 @@
 import { recoverTypedDataAddress, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
-import { AssayError, ConfigError } from "../src/index.js";
+import { AssayError, ConfigError, DelegateAlreadyBoundError, ScopeMissingError } from "../src/index.js";
 import { checkBindingChallenge } from "../src/core/binding.js";
 import { BINDING, fakeClient, KEY, NOW_MS, WEB, type Seen } from "./fake.js";
 
@@ -41,6 +41,161 @@ function delegateApi(activeAfter = 2, approvalUrl: string | null = APPROVAL) {
   };
 }
 
+const OTHER = "0x5555555555555555555555555555555555555555";
+const OTHER10 = `${ctx.network}:${OTHER}`;
+
+/**
+ * A credential with another key bound: binding this key leaves it pending (the old key keeps
+ * signing) until the approval lands after `promoteAfter` reads.
+ */
+function rebindApi(promoteAfter = 2, bindAnswer?: (req: Seen) => { status?: number; body: unknown }) {
+  let pending = false;
+  let reads = 0;
+  return (req: Seen) => {
+    if (req.method === "GET" && req.url.endsWith("/agents/me/delegate")) {
+      if (pending) reads++;
+      const promoted = pending && reads > promoteAfter;
+      return {
+        body: {
+          data: {
+            credentialId: CREDENTIAL,
+            delegate: promoted ? CAIP10 : OTHER10,
+            boundAt: promoted ? "2026-10-22T10:05:00.000Z" : "2026-10-01T00:00:00.000Z",
+            pendingDelegate: pending && !promoted ? CAIP10 : null,
+            pendingSince: pending && !promoted ? "2026-10-22T10:00:00.000Z" : null,
+            paidCalls: {
+              status: "ACTIVE",
+              maxVoucherAmount: "1",
+              maxPerWindow: "2",
+              spentInWindow: "0",
+              validUntil: null,
+            },
+            paidCallsUnknown: false,
+            approvalUrl: `${APPROVAL}#key=${pending && !promoted ? KEY.address : OTHER}`,
+          },
+        },
+      };
+    }
+    if (req.method === "POST" && req.url.endsWith("/agents/me/delegate/challenge"))
+      return { body: { data: BINDING.valid[0].challenge } };
+    if (req.method === "POST" && req.url.endsWith("/agents/me/delegate")) {
+      if (bindAnswer) return bindAnswer(req);
+      pending = true;
+      return {
+        status: 201,
+        body: {
+          data: {
+            credentialId: CREDENTIAL,
+            status: "PENDING_APPROVAL",
+            delegate: OTHER10,
+            boundAt: "2026-10-01T00:00:00.000Z",
+            pendingDelegate: CAIP10,
+            pendingSince: "2026-10-22T10:00:00.000Z",
+            approvalUrl: `${APPROVAL}#key=${KEY.address}`,
+          },
+        },
+      };
+    }
+    return undefined;
+  };
+}
+
+describe("paidCalls: replacing a bound key", () => {
+  it("status: another key is bound", async () => {
+    const { client } = fakeClient({ api: rebindApi() });
+    const s = await client.paidCalls.status();
+    expect(s.state).toBe("bound_to_other_key");
+    expect(s.delegate).toBe(OTHER);
+    expect(s.boundAt).toBe("2026-10-01T00:00:00.000Z");
+    expect(s.pendingDelegate).toBeNull();
+    // The server's link names the old key; this client's key replaces it in the fragment.
+    expect(s.approvalUrl).toBe(`${APPROVAL}#key=${KEY.address}`);
+  });
+
+  it("bind -> PENDING_APPROVAL with the old key still bound -> waitUntilActive once promoted", async () => {
+    const { client, signTypedData } = fakeClient({ api: rebindApi() });
+    const setup = await client.paidCalls.bind();
+    expect(setup.alreadyBound).toBe(false);
+    expect(setup.bindStatus).toBe("PENDING_APPROVAL");
+    expect(setup.state).toBe("pending_approval");
+    expect(setup.delegate).toBe(OTHER);
+    expect(setup.pendingDelegate).toBe(KEY.address);
+    expect(setup.pendingSince).toBe("2026-10-22T10:00:00.000Z");
+    expect(setup.approvalUrl).toBe(`${APPROVAL}#key=${KEY.address}`);
+    expect(signTypedData).toHaveBeenCalledTimes(1);
+
+    // The old key's paid calls are ACTIVE, but this key is not the delegate yet: keep waiting.
+    const active = await client.paidCalls.waitUntilActive();
+    expect(active.state).toBe("active");
+    expect(active.delegate).toBe(KEY.address);
+    expect(active.pendingDelegate).toBeNull();
+  });
+
+  it("bind again while pending is a no-op: nothing is signed", async () => {
+    const { client, signTypedData } = fakeClient({ api: rebindApi(1_000) });
+    await client.paidCalls.bind();
+    const again = await client.paidCalls.bind();
+    expect(again.alreadyBound).toBe(true);
+    expect(again.bindStatus).toBe("PENDING_APPROVAL");
+    expect(signTypedData).toHaveBeenCalledTimes(1);
+  });
+
+  it("PENDING_APPROVAL naming another pending key is not accepted", async () => {
+    const api = rebindApi(2, () => ({
+      body: {
+        data: { credentialId: CREDENTIAL, status: "PENDING_APPROVAL", delegate: OTHER10, pendingDelegate: OTHER10 },
+      },
+    }));
+    const { client } = fakeClient({ api });
+    await expect(client.paidCalls.bind()).rejects.toMatchObject({ code: "BINDING_NOT_ACCEPTED" });
+  });
+
+  it("ACTIVE naming only the old key is not accepted", async () => {
+    const api = rebindApi(2, () => ({
+      body: { data: { credentialId: CREDENTIAL, status: "ACTIVE", delegate: OTHER10, pendingDelegate: CAIP10 } },
+    }));
+    const { client } = fakeClient({ api });
+    await expect(client.paidCalls.bind()).rejects.toMatchObject({ code: "BINDING_NOT_ACCEPTED" });
+  });
+
+  it("409 ACCOUNT_DELEGATE_ALREADY_BOUND is DelegateAlreadyBoundError", async () => {
+    const api = rebindApi(2, () => ({
+      status: 409,
+      body: {
+        success: false,
+        error: { code: "ACCOUNT_DELEGATE_ALREADY_BOUND", message: "bound to another credential", statusCode: 409 },
+      },
+    }));
+    const { client } = fakeClient({ api });
+    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DelegateAlreadyBoundError);
+    expect((err as DelegateAlreadyBoundError).code).toBe("ACCOUNT_DELEGATE_ALREADY_BOUND");
+    expect((err as DelegateAlreadyBoundError).status).toBe(409);
+  });
+
+  it("bind without the payments scope is ScopeMissingError", async () => {
+    const api = (req: Seen) =>
+      req.url.endsWith("/agents/me/delegate/challenge")
+        ? {
+            status: 403,
+            body: {
+              success: false,
+              error: {
+                code: "AUTH_SCOPE_MISSING",
+                message: "no",
+                statusCode: 403,
+                context: { requiredScope: "payments" },
+              },
+            },
+          }
+        : rebindApi()(req);
+    const { client } = fakeClient({ api });
+    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ScopeMissingError);
+    expect((err as ScopeMissingError).requiredScope).toBe("payments");
+  });
+});
+
 describe("paidCalls", () => {
   it("status: unbound, with the server's approval link and this key's fingerprint", async () => {
     const { client } = fakeClient({ api: delegateApi() });
@@ -55,6 +210,7 @@ describe("paidCalls", () => {
     const { client, seen, signTypedData, sleep } = fakeClient({ api: delegateApi() });
     const setup = await client.paidCalls.bind();
     expect(setup.alreadyBound).toBe(false);
+    expect(setup.bindStatus).toBe("ACTIVE");
     expect(setup.state).toBe("pending_approval");
     expect(setup.delegate).toBe(KEY.address);
     expect(setup.approvalUrl).toBe(`${APPROVAL}#key=${KEY.address}`);

@@ -126,6 +126,8 @@ if (status.state !== "active") {
 }
 ```
 
+If another key is already bound to the API key, `bind()` answers `bindStatus: "PENDING_APPROVAL"`: the old key stays `delegate` and keeps signing, this key is `pendingDelegate`, and it replaces the old one only when the person approves it. `waitUntilActive()` resolves once `delegate` is this client's key and its paid calls are on. A key that is bound to another API key is refused with `DelegateAlreadyBoundError` (409).
+
 The approval link is built on the web app's origin (`webUrl`, default `https://portal.goassay.ai`). A link the server sends is used only when it is on that same origin. The key's address travels only in the URL fragment. The approval cannot be automated: a person opens the link and compares the fingerprint.
 
 ## Reading a receipt
@@ -137,11 +139,13 @@ receipt.chargedPrice; // { amount: "100000", asset: "eip155:...", decimals: 6 }
 
 ## Handling errors
 
-Every error is an `AssayError` with a stable `code`. Branch on the class or the code, never on the message.
+Every error is an `AssayError` with a stable `code`. Branch on the class or the code, never on the message. A missing scope is a `ScopeMissingError` naming `requiredScope`, on the MCP host and on the API alike; a route only a signed-in person may use is a `HumanSessionRequiredError` (an `AuthError`).
 
 ```ts
 import {
   AssayError,
+  HumanSessionRequiredError,
+  PaymentNetworkUnknownError,
   PaymentRefusedError,
   PaymentRequiredError,
   RateLimitError,
@@ -152,6 +156,7 @@ try {
   await assay.tools.call("weather_forecast", { city: "Lisbon" });
 } catch (e) {
   if (e instanceof ScopeMissingError) console.error(`the API key needs the ${e.requiredScope} scope`);
+  else if (e instanceof HumanSessionRequiredError) console.error("only a signed-in person can do this");
   else if (e instanceof PaymentRequiredError) console.error("paid tool: pass a signer");
   else if (e instanceof PaymentNetworkUnknownError) console.error(`network ${e.network} is not supported yet`);
   else if (e instanceof PaymentRefusedError) console.error(`refused before signing by ${e.guard}: ${e.code}`);

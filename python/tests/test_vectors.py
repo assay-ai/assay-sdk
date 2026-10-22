@@ -145,7 +145,12 @@ def run_bind(challenge: Any) -> tuple[list[Any], list[str]]:
         posted.append(path)
         if path.endswith("/challenge"):
             return challenge, None
-        return {"credentialId": CTX["credentialId"], "delegate": f"{CTX['network']}:{account.address}"}, None
+        bound = {
+            "credentialId": CTX["credentialId"],
+            "status": "ACTIVE",
+            "delegate": f"{CTX['network']}:{account.address}",
+        }
+        return bound, None
         yield  # a flow
 
     flow = bind_evm_key(

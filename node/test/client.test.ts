@@ -2,7 +2,9 @@ import { hashTypedData, recoverTypedDataAddress, type Hex } from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
   AssayError,
+  AuthError,
   ConfigError,
+  HumanSessionRequiredError,
   PaymentRefusedError,
   PaymentRequiredError,
   PaymentSchemeUnsupportedError,
@@ -265,6 +267,33 @@ describe("errors", () => {
     expect(err).toBeInstanceOf(ScopeMissingError);
     expect((err as ScopeMissingError).requiredScope).toBe("tools:call");
     expect((err as ScopeMissingError).status).toBe(403);
+  });
+
+  it("the MCP host's plain HTTP 403 is ScopeMissingError on every MCP method, not retried", async () => {
+    const { client, seen } = fakeClient({ mcp: () => scope });
+    for (const run of [() => client.tools.search("weather"), () => client.tools.get(TOOL)]) {
+      const err = await run().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ScopeMissingError);
+      expect((err as ScopeMissingError).requiredScope).toBe("tools:call");
+    }
+    expect(seen.filter((s) => s.url === MCP)).toHaveLength(2);
+  });
+
+  it("AUTH_HUMAN_SESSION_REQUIRED is HumanSessionRequiredError, an AuthError", async () => {
+    const { client } = fakeClient({
+      api: () => ({
+        status: 403,
+        body: {
+          success: false,
+          error: { code: "AUTH_HUMAN_SESSION_REQUIRED", message: "needs a signed-in user", statusCode: 403 },
+        },
+      }),
+    });
+    const err = await client.receipts.get(RECEIPT.intentId).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HumanSessionRequiredError);
+    expect(err).toBeInstanceOf(AuthError);
+    expect((err as AuthError).code).toBe("AUTH_HUMAN_SESSION_REQUIRED");
+    expect((err as AuthError).status).toBe(403);
   });
 
   it("AUTH_SCOPE_MISSING on the API is ScopeMissingError", async () => {

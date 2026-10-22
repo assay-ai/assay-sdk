@@ -119,7 +119,10 @@ describe("binding.json", () => {
     const post = vi.fn(async (path: string) =>
       path.endsWith("/challenge")
         ? { data: challenge, date: new Date(ctx.nowSeconds * 1000).toUTCString() }
-        : { data: { credentialId: ctx.credentialId, delegate: `${ctx.network}:${key.address}` }, date: null },
+        : {
+            data: { credentialId: ctx.credentialId, status: "ACTIVE", delegate: `${ctx.network}:${key.address}` },
+            date: null,
+          },
     );
     const run = bindEvmKey({
       signer: { namespace: "eip155", address: key.address, signTypedData },

@@ -8,13 +8,14 @@ import { PaymentError } from "../../errors.js";
 import type { RestClient } from "../../rest.js";
 import type { EvmSigner } from "../../signer.js";
 
-/** The `data` of `POST /agents/me/delegate`. */
+/** The `data` of `POST /agents/me/delegate`; `status` is `ACTIVE` or `PENDING_APPROVAL`. */
 export type BindAnswer = Record<string, unknown>;
 
 /**
  * Binds an EVM key to the API key's credential (spec section 5): the challenge, its field-by-field
  * check, the signature over typed data rebuilt from the SDK's own constants, the bind request, and
- * a check that the answer names this key. A challenge refused only on its expiry is retried once.
+ * a check that the answer names this key (as `delegate` when `ACTIVE`, as `pendingDelegate` when
+ * `PENDING_APPROVAL`). A challenge refused only on its expiry is retried once.
  */
 export async function bindEvmKey(o: {
   signer: EvmSigner;
@@ -59,9 +60,12 @@ export async function bindEvmKey(o: {
       const p = typeof v === "string" ? parseCaip10(v) : null;
       return p !== null && p.chainId === o.chainId && p.address === address;
     };
-    if (!names(data.delegate) && !names(data.pendingDelegate)) {
-      throw new PaymentError("BINDING_NOT_ACCEPTED", "Assay did not confirm the binding of this key");
-    }
+    // ACTIVE: this key is the delegate now. PENDING_APPROVAL: another key stays bound and keeps
+    // signing; this one waits as `pendingDelegate` until a person approves it.
+    const accepted =
+      (data.status === "ACTIVE" && names(data.delegate)) ||
+      (data.status === "PENDING_APPROVAL" && names(data.pendingDelegate));
+    if (!accepted) throw new PaymentError("BINDING_NOT_ACCEPTED", "Assay did not confirm the binding of this key");
     return data;
   }
   throw new PaymentError("BINDING_CLOCK", "the binding challenge expired twice; check this machine's clock");

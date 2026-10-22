@@ -10,7 +10,9 @@ from eth_account.messages import encode_typed_data
 
 from goassay import (
     AssayError,
+    AuthError,
     ConfigError,
+    HumanSessionRequiredError,
     PaymentError,
     PaymentRefusedError,
     PaymentRequiredError,
@@ -241,6 +243,28 @@ def test_scope_missing_over_mcp() -> None:
     with pytest.raises(ScopeMissingError) as err:
         fake.client().tools.call(TOOL, {})
     assert err.value.required_scope == "tools:call" and err.value.status == 403
+
+
+def test_mcp_host_plain_403_is_scope_missing_on_every_method_not_retried() -> None:
+    fake = Fake(mcp=lambda p, s: SCOPE)
+    client = fake.client()
+    for run in (lambda: client.tools.search("weather"), lambda: client.tools.get(TOOL)):
+        with pytest.raises(ScopeMissingError) as err:
+            run()
+        assert err.value.required_scope == "tools:call"
+    assert len([s for s in fake.seen if s.url == MCP]) == 2
+
+
+def test_human_session_required_is_an_auth_error() -> None:
+    body = {
+        "success": False,
+        "error": {"code": "AUTH_HUMAN_SESSION_REQUIRED", "message": "needs a signed-in user", "statusCode": 403},
+    }
+    fake = Fake(api=lambda s: Answer(body, 403))
+    with pytest.raises(HumanSessionRequiredError) as err:
+        fake.client().receipts.get(RECEIPT["intentId"])
+    assert isinstance(err.value, AuthError)
+    assert err.value.code == "AUTH_HUMAN_SESSION_REQUIRED" and err.value.status == 403
 
 
 def test_scope_missing_on_api() -> None:

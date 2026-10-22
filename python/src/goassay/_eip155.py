@@ -376,7 +376,8 @@ def bind_evm_key(
     now: Callable[[], float],
 ) -> Flow[dict[str, Any]]:
     """Binds an EVM key to the API key's credential (spec section 5): challenge, field check,
-    signature over typed data rebuilt from the SDK's constants, bind, and a check of the answer."""
+    signature over typed data rebuilt from the SDK's constants, bind, and a check that the answer
+    names this key (as ``delegate`` when ``ACTIVE``, as ``pendingDelegate`` when ``PENDING_APPROVAL``)."""
     address = to_checksum_address(signer.address)
     for attempt in range(2):
         data, date = yield from rest("POST", "/agents/me/delegate/challenge", {"delegate": address})
@@ -409,7 +410,12 @@ def bind_evm_key(
             p = parse_caip10(v)
             return p is not None and p[0] == chain_id and p[1] == address
 
-        if not names(bound.get("delegate")) and not names(bound.get("pendingDelegate")):
+        # ACTIVE: this key is the delegate now. PENDING_APPROVAL: another key stays bound and keeps
+        # signing; this one waits as ``pendingDelegate`` until a person approves it.
+        accepted = (bound.get("status") == "ACTIVE" and names(bound.get("delegate"))) or (
+            bound.get("status") == "PENDING_APPROVAL" and names(bound.get("pendingDelegate"))
+        )
+        if not accepted:
             raise PaymentError("BINDING_NOT_ACCEPTED", "Assay did not confirm the binding of this key")
         return bound
     raise PaymentError("BINDING_CLOCK", "the binding challenge expired twice; check this machine's clock")
