@@ -154,6 +154,34 @@ def test_server_refusal_of_signed_voucher_is_raised_and_not_resigned() -> None:
     assert fake.signer.calls == 1
 
 
+# A free-calls-only key (no ``payments`` scope): the paid path refuses it with AUTH_SCOPE_MISSING on
+# ``assay/error``, naming the scope at the top level, with or without a voucher.
+NO_PAYMENTS = tool_result(
+    {"assay/error": {"requiredScope": "payments", "code": "AUTH_SCOPE_MISSING", "retryable": False}},
+    isError=True,
+    content=[
+        {"type": "text", "text": "This key does not have the payments scope. Create a key with that scope to use this"}
+    ],
+)
+
+
+def test_free_only_key_on_paid_tool_is_scope_missing_nothing_signed() -> None:
+    fake = Fake(mcp=lambda p, s: get_tool_answer() if p["name"] == "get_tool" else NO_PAYMENTS)
+    with pytest.raises(ScopeMissingError) as err:
+        fake.client().tools.call(TOOL, {})
+    assert err.value.required_scope == "payments" and err.value.retryable is False
+    assert "payments scope" in str(err.value)
+    assert fake.signer.calls == 0 and len(fake.calls()) == 1 and fake.sleeps == []
+
+
+def test_scope_missing_on_signed_request_is_raised_not_resigned_or_resent() -> None:
+    fake = Fake(mcp=paid_tool(lambda n: NO_PAYMENTS))
+    with pytest.raises(ScopeMissingError) as err:
+        fake.client().tools.call(TOOL, {})
+    assert err.value.required_scope == "payments"
+    assert fake.signer.calls == 1 and len(fake.calls()) == 2 and fake.sleeps == []
+
+
 def test_payment_required_without_signer() -> None:
     fake = Fake(mcp=lambda p, s: payment_required(fix_url="https://app.example.test/agents/enable-paid?credential=x"))
     with pytest.raises(PaymentRequiredError) as err:

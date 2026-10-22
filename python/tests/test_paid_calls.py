@@ -6,7 +6,13 @@ import pytest
 from eth_account import Account
 from eth_account.messages import encode_typed_data
 
-from goassay import AssayError, ConfigError, DelegateAlreadyBoundError, ScopeMissingError
+from goassay import (
+    AssayError,
+    ConfigError,
+    DelegateAlreadyBoundError,
+    DelegateBindConflictError,
+    ScopeMissingError,
+)
 from goassay._binding import check_binding_challenge
 from goassay.signers import full_message
 from tests.fake import ACCOUNT, BINDING, NOW, WEB, Answer, Fake, Seen
@@ -249,6 +255,37 @@ def test_delegate_already_bound_is_typed() -> None:
     with pytest.raises(DelegateAlreadyBoundError) as err:
         Fake(api=rebind_api(2, Answer(body, 409))).client().paid_calls.bind()
     assert err.value.code == "ACCOUNT_DELEGATE_ALREADY_BOUND" and err.value.status == 409
+
+
+def test_bind_conflict_is_typed_and_one_more_bind_parks_the_key() -> None:
+    parks = rebind_api(1_000)
+    body = {
+        "success": False,
+        "error": {"code": "ACCOUNT_DELEGATE_BIND_CONFLICT", "message": "bound at the same moment", "statusCode": 409},
+    }
+    binds = {"n": 0}
+
+    def api(req: Seen) -> Answer | None:
+        if req.method == "POST" and req.url.endswith("/agents/me/delegate"):
+            binds["n"] += 1
+            if binds["n"] == 1:
+                return Answer(body, 409)
+        return parks(req)  # type: ignore[no-any-return]
+
+    fake = Fake(api=api)
+    client = fake.client()
+    with pytest.raises(DelegateBindConflictError) as err:
+        client.paid_calls.bind()
+    assert err.value.code == "ACCOUNT_DELEGATE_BIND_CONFLICT" and err.value.status == 409
+    assert err.value.retryable is True
+    # Not retried by the SDK: one bind request, one signature.
+    assert binds["n"] == 1 and fake.signer.calls == 1
+
+    again = client.paid_calls.bind()
+    assert again.already_bound is False and again.bind_status == "PENDING_APPROVAL"
+    assert again.pending_delegate == ACCOUNT.address
+    assert len([s for s in fake.seen if s.url.endswith("/agents/me/delegate/challenge")]) == 2
+    assert fake.signer.calls == 2
 
 
 def test_bind_without_payments_scope_is_scope_missing() -> None:

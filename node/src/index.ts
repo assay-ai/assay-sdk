@@ -5,6 +5,7 @@ export {
   AuthError,
   ConfigError,
   DelegateAlreadyBoundError,
+  DelegateBindConflictError,
   HumanSessionRequiredError,
   NetworkError,
   PaymentError,

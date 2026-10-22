@@ -174,6 +174,43 @@ describe("paid call", () => {
     expect(signTypedData).toHaveBeenCalledTimes(1);
   });
 
+  // A free-calls-only key (no `payments` scope): the paid path refuses it with AUTH_SCOPE_MISSING
+  // on `assay/error`, naming the scope at the top level, with or without a voucher.
+  const noPayments = toolResult(
+    { "assay/error": { requiredScope: "payments", code: "AUTH_SCOPE_MISSING", retryable: false } },
+    {
+      isError: true,
+      content: [
+        { type: "text", text: "This key does not have the payments scope. Create a key with that scope to use this" },
+      ],
+    },
+  );
+
+  it("a free-calls-only key on a paid tool is ScopeMissingError(payments): nothing signed, not resent", async () => {
+    const { client, calls, signTypedData, sleep } = fakeClient({
+      mcp: (params) => (params.name === "get_tool" ? getToolAnswer() : noPayments),
+    });
+    const err = await client.tools.call(TOOL, {}).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ScopeMissingError);
+    expect((err as ScopeMissingError).requiredScope).toBe("payments");
+    expect((err as ScopeMissingError).retryable).toBe(false);
+    expect((err as ScopeMissingError).message).toMatch(/payments scope/);
+    expect(signTypedData).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("AUTH_SCOPE_MISSING(payments) on the signed request is thrown; nothing is signed or sent again", async () => {
+    const { client, calls, signTypedData, sleep } = fakeClient({ mcp: paidTool(() => noPayments) });
+    const err = await client.tools.call(TOOL, {}).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ScopeMissingError);
+    expect((err as ScopeMissingError).requiredScope).toBe("payments");
+    expect((err as ScopeMissingError).idempotencyKey).toBeDefined();
+    expect(signTypedData).toHaveBeenCalledTimes(1);
+    expect(calls()).toHaveLength(2);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it("PAYMENT_REQUIRED without a signer is PaymentRequiredError with the requirement and fixUrl", async () => {
     const { client } = fakeClient({
       signer: false,

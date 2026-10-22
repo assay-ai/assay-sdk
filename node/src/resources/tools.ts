@@ -111,6 +111,9 @@ function toolError(e: Record<string, unknown>, result: Record<string, unknown>):
   const wait = typeof e.retryAfterMs === "number" ? e.retryAfterMs : secs;
   const details: Record<string, unknown> = isObject(e.details) ? { ...e.details } : {};
   if (typeof e.intentId === "string") details.intentId = e.intentId;
+  // A scope refusal on a tool call names the scope on `assay/error` itself, not under `details`.
+  if (typeof e.requiredScope === "string" && details.requiredScope === undefined)
+    details.requiredScope = e.requiredScope;
   return errorFromServer(code, message, {
     retryable: e.retryable === true,
     ...(typeof e.fixUrl === "string" ? { fixUrl: e.fixUrl } : {}),

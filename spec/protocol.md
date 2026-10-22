@@ -26,6 +26,7 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 - Every request carries `Authorization: Bearer <API key>`. The API key is created in the Assay web app for one agent.
 - Permissions live on the key as scopes. A request that needs a scope the key does not have is refused with HTTP `403`, error code `AUTH_SCOPE_MISSING` and `error.context.requiredScope` naming the scope, in the REST envelope (section 2.2). On the MCP endpoint this refusal is a plain HTTP `403` with that REST envelope, sent before any JSON-RPC is read: a client MUST read a non-JSON-RPC answer as a REST error.
+- A key without the `payments` scope (free calls only) that calls a paid tool is refused on the paid path itself, before any payment requirement is offered and whether or not a voucher was sent: a tool result with `isError: true` and `_meta["assay/error"]` = `{ "code": "AUTH_SCOPE_MISSING", "requiredScope": "payments", "retryable": false }` (here `requiredScope` sits on `assay/error` itself). The client MUST surface it as a scope error and MUST NOT sign, re-sign or resend: only a new key with `payments` fixes it.
 - A route that changes the controls over an agent (its spend policy, its keys, where its alerts go) is refused to every API key with HTTP `403` and `AUTH_HUMAN_SESSION_REQUIRED`: only a person signed in to the web app may do it.
 
   | Scope | Allows |
@@ -173,6 +174,7 @@ The EIP-712 domain type is `EIP712Domain(string name,string version,uint256 chai
 - `PENDING_APPROVAL`: another key is bound and stays bound: it keeps signing, and `delegate` still names it. The client's key waits as `pendingDelegate`, which MUST name the client's key. It replaces `delegate` in one step when the person's on-chain approval (section 5.4) lands. A new key never silently replaces a bound one.
 - Any other answer: the client treats the bind as failed.
 - A `409` with code `ACCOUNT_DELEGATE_ALREADY_BOUND` means the key is bound (or pending) on another live credential; nothing was bound.
+- A `409` with code `ACCOUNT_DELEGATE_BIND_CONFLICT` means another key was bound to this credential at the same moment (two first binds raced); nothing was bound. It is retryable once: a new challenge and bind then answer `PENDING_APPROVAL`, with the client's key as `pendingDelegate`. A client does not retry it on its own.
 
 Binding needs the `payments` scope.
 
@@ -365,9 +367,10 @@ Codes a client must know for this flow:
 | `MCP_QUOTA_EXCEEDED` | The free quota is used up | yes, later |
 | `MCP_VELOCITY_LIMIT_EXCEEDED` | Too many calls in a short window | yes, later |
 | `RATE_LIMITED` | Request rate limit; carries `retryAfterMs` | yes, after `retryAfterMs` |
-| `AUTH_SCOPE_MISSING` | The API key lacks a scope (HTTP 403); `context.requiredScope` names it | no |
+| `AUTH_SCOPE_MISSING` | The API key lacks a scope (HTTP 403); `context.requiredScope` names it (on a tool call, `assay/error.requiredScope`) | no |
 | `AUTH_HUMAN_SESSION_REQUIRED` | Only a signed-in person may do this, never an API key (HTTP 403) | no |
 | `ACCOUNT_DELEGATE_ALREADY_BOUND` | The payment key is bound to another live credential (HTTP 409) | no |
+| `ACCOUNT_DELEGATE_BIND_CONFLICT` | Another key won a first bind at the same moment; nothing bound (HTTP 409) | once: bind again, the key then waits as pending |
 
 A full, machine-readable code catalog will be published as `spec/errors.json`.
 

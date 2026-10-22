@@ -197,7 +197,9 @@ class PaidCalls:
         When another key is bound, this key waits as ``pending_delegate`` (``bind_status ==
         "PENDING_APPROVAL"``) and the old key keeps signing until a person approves the new one at
         ``approval_url``, comparing the fingerprint. Needs the ``payments`` scope. A key bound to
-        another API key is refused with ``DelegateAlreadyBoundError`` (409)."""
+        another API key is refused with ``DelegateAlreadyBoundError`` (409). When another key wins a
+        first bind at the same moment, this is ``DelegateBindConflictError`` (409, retryable):
+        nothing was bound, and calling ``bind()`` once more parks this key as pending."""
         return self._c._run(bind(self._c._ctx, network))
 
     def wait_until_active(self, *, timeout: float = 900.0) -> PaidCallsStatus:

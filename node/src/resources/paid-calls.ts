@@ -152,6 +152,8 @@ export class PaidCalls {
    * `pendingDelegate` (`bindStatus: "PENDING_APPROVAL"`) and the old key keeps signing until a
    * person approves the new one at `approvalUrl`, comparing the fingerprint. Needs the `payments`
    * scope. A key bound to another API key is refused with `DelegateAlreadyBoundError` (409).
+   * When another key wins a first bind at the same moment, this is `DelegateBindConflictError`
+   * (409, retryable): nothing was bound, and calling `bind()` once more parks this key as pending.
    */
   async bind(options: { network?: string } = {}): Promise<BindResult> {
     const signer = this.#signer();

@@ -10,6 +10,7 @@ as the nearest class (or ``AssayError`` itself)::
     │   ├─ ScopeMissingError             403 AUTH_SCOPE_MISSING (.required_scope)
     │   └─ HumanSessionRequiredError     403 AUTH_HUMAN_SESSION_REQUIRED: only a signed-in person may do this
     ├─ DelegateAlreadyBoundError         409 ACCOUNT_DELEGATE_ALREADY_BOUND: the key is bound to another API key
+    ├─ DelegateBindConflictError         409 ACCOUNT_DELEGATE_BIND_CONFLICT: another key won a first bind; retry once
     ├─ PaymentError                      a PAYMENT_* refusal from the server
     │   ├─ PaymentRequiredError          the tool is paid and no signer was given (.requirement)
     │   ├─ PaymentSchemeUnsupportedError no signer for the requirement's network (.network)
@@ -84,6 +85,17 @@ class DelegateAlreadyBoundError(AssayError):
     def __init__(self, message: str, **kw: Any) -> None:
         kw.setdefault("status", 409)
         super().__init__("ACCOUNT_DELEGATE_ALREADY_BOUND", message, **kw)
+
+
+class DelegateBindConflictError(AssayError):
+    """Another payment key was bound to this API key at the same moment (two first binds raced);
+    nothing was bound. Retryable once: a second ``bind()`` asks for a new challenge and parks this
+    key as ``pending_delegate`` (``bind_status == "PENDING_APPROVAL"``) until a person approves it."""
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        kw.setdefault("status", 409)
+        kw["retryable"] = True
+        super().__init__("ACCOUNT_DELEGATE_BIND_CONFLICT", message, **kw)
 
 
 class PaymentError(AssayError):
@@ -166,6 +178,8 @@ def error_from_server(
         return HumanSessionRequiredError(message, **kw)
     if c == "ACCOUNT_DELEGATE_ALREADY_BOUND":
         return DelegateAlreadyBoundError(message, **kw)
+    if c == "ACCOUNT_DELEGATE_BIND_CONFLICT":
+        return DelegateBindConflictError(message, **kw)
     if c in _RATE_LIMIT_CODES or status == 429:
         return RateLimitError(c, message, retry_after=retry_after, **kw)
     if c.startswith("AUTH_") or status == 401:

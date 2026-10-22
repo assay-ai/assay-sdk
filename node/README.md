@@ -126,7 +126,7 @@ if (status.state !== "active") {
 }
 ```
 
-If another key is already bound to the API key, `bind()` answers `bindStatus: "PENDING_APPROVAL"`: the old key stays `delegate` and keeps signing, this key is `pendingDelegate`, and it replaces the old one only when the person approves it. `waitUntilActive()` resolves once `delegate` is this client's key and its paid calls are on. A key that is bound to another API key is refused with `DelegateAlreadyBoundError` (409).
+If another key is already bound to the API key, `bind()` answers `bindStatus: "PENDING_APPROVAL"`: the old key stays `delegate` and keeps signing, this key is `pendingDelegate`, and it replaces the old one only when the person approves it. `waitUntilActive()` resolves once `delegate` is this client's key and its paid calls are on. A key that is bound to another API key is refused with `DelegateAlreadyBoundError` (409). If another key wins a first bind at the same moment, `bind()` raises `DelegateBindConflictError` (409, `retryable`): nothing was bound, and calling `bind()` once more parks this key as `pendingDelegate` (`bindStatus: "PENDING_APPROVAL"`) for the person to approve.
 
 The approval link is built on the web app's origin (`webUrl`, default `https://portal.goassay.ai`). A link the server sends is used only when it is on that same origin. The key's address travels only in the URL fragment. The approval cannot be automated: a person opens the link and compares the fingerprint.
 
@@ -139,7 +139,7 @@ receipt.chargedPrice; // { amount: "100000", asset: "eip155:...", decimals: 6 }
 
 ## Handling errors
 
-Every error is an `AssayError` with a stable `code`. Branch on the class or the code, never on the message. A missing scope is a `ScopeMissingError` naming `requiredScope`, on the MCP host and on the API alike; a route only a signed-in person may use is a `HumanSessionRequiredError` (an `AuthError`).
+Every error is an `AssayError` with a stable `code`. Branch on the class or the code, never on the message. A missing scope is a `ScopeMissingError` naming `requiredScope`, on the MCP host and on the API alike; a key without `payments` that calls a paid tool gets a `ScopeMissingError` naming `payments`, and nothing is signed or sent again; a route only a signed-in person may use is a `HumanSessionRequiredError` (an `AuthError`).
 
 ```ts
 import {

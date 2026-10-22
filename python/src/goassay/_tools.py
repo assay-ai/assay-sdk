@@ -94,6 +94,9 @@ def _tool_error(e: dict[str, Any], result: dict[str, Any]) -> AssayError:
     details = dict(e["details"]) if isinstance(e.get("details"), dict) else {}
     if isinstance(e.get("intentId"), str):
         details["intentId"] = e["intentId"]
+    # A scope refusal on a tool call names the scope on ``assay/error`` itself, not under ``details``.
+    if isinstance(e.get("requiredScope"), str) and "requiredScope" not in details:
+        details["requiredScope"] = e["requiredScope"]
     return error_from_server(
         code,
         message,

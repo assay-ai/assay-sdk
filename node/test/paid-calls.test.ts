@@ -1,6 +1,12 @@
 import { recoverTypedDataAddress, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
-import { AssayError, ConfigError, DelegateAlreadyBoundError, ScopeMissingError } from "../src/index.js";
+import {
+  AssayError,
+  ConfigError,
+  DelegateAlreadyBoundError,
+  DelegateBindConflictError,
+  ScopeMissingError,
+} from "../src/index.js";
 import { checkBindingChallenge } from "../src/core/binding.js";
 import { BINDING, fakeClient, KEY, NOW_MS, WEB, type Seen } from "./fake.js";
 
@@ -171,6 +177,39 @@ describe("paidCalls: replacing a bound key", () => {
     expect(err).toBeInstanceOf(DelegateAlreadyBoundError);
     expect((err as DelegateAlreadyBoundError).code).toBe("ACCOUNT_DELEGATE_ALREADY_BOUND");
     expect((err as DelegateAlreadyBoundError).status).toBe(409);
+  });
+
+  it("409 ACCOUNT_DELEGATE_BIND_CONFLICT is DelegateBindConflictError; one more bind() parks the key", async () => {
+    const parks = rebindApi(1_000);
+    let binds = 0;
+    const api = (req: Seen) => {
+      if (req.method === "POST" && req.url.endsWith("/agents/me/delegate") && binds++ === 0) {
+        return {
+          status: 409,
+          body: {
+            success: false,
+            error: { code: "ACCOUNT_DELEGATE_BIND_CONFLICT", message: "bound at the same moment", statusCode: 409 },
+          },
+        };
+      }
+      return parks(req);
+    };
+    const { client, seen, signTypedData } = fakeClient({ api });
+    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DelegateBindConflictError);
+    expect((err as DelegateBindConflictError).code).toBe("ACCOUNT_DELEGATE_BIND_CONFLICT");
+    expect((err as DelegateBindConflictError).status).toBe(409);
+    expect((err as DelegateBindConflictError).retryable).toBe(true);
+    // Not retried by the SDK: one bind request, one signature.
+    expect(seen.filter((s) => s.method === "POST" && s.url.endsWith("/agents/me/delegate"))).toHaveLength(1);
+    expect(signTypedData).toHaveBeenCalledTimes(1);
+
+    const again = await client.paidCalls.bind();
+    expect(again.alreadyBound).toBe(false);
+    expect(again.bindStatus).toBe("PENDING_APPROVAL");
+    expect(again.pendingDelegate).toBe(KEY.address);
+    expect(seen.filter((s) => s.url.endsWith("/agents/me/delegate/challenge"))).toHaveLength(2);
+    expect(signTypedData).toHaveBeenCalledTimes(2);
   });
 
   it("bind without the payments scope is ScopeMissingError", async () => {
