@@ -171,7 +171,7 @@ export class PaidCalls {
       if (network === undefined)
         throw new PaymentNetworkUnknownError(
           "eip155",
-          "no network is configured for this signer's namespace (eip155); pass `networks` to the Assay constructor with an entry for your chain (production values ship with a later release)",
+          "no network is configured for this signer's namespace (eip155); pass `networks` to the Assay constructor with an entry for your chain",
         );
       throw new PaymentNetworkUnknownError(network);
     }

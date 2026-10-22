@@ -4,8 +4,9 @@ Per CAIP-2 network: the escrow, the asset, its decimals and default public RPC U
 checked against this table only, never against the server, so a compromised API cannot redirect
 them. Changing an address means a new SDK release.
 
-Production values are not released yet, so the built-in table is empty: a paid call or a bind on a
-network that is not in it is refused with ``PaymentNetworkUnknownError``.
+The built-in table holds the network Assay's production runs on today, Robinhood Chain testnet
+(``eip155:46630``), with two RPC hosts from different operators. A paid call or a bind on a network
+that is not in the table is refused with ``PaymentNetworkUnknownError``.
 
 ``networks=`` configures any chain from outside (a testnet, another deployment): its entries are
 merged over the built-in table, adding networks, and an entry for a network the table has replaces
@@ -24,8 +25,20 @@ from goassay._chain import is_usable_rpc_url
 from goassay._eip155 import NetworkEntry, eip155_networks
 from goassay.errors import ConfigError
 
-# The built-in production table. Empty until the production values are released.
-BUILT_IN_NETWORKS: Mapping[str, Mapping[str, Any]] = MappingProxyType({})
+# The built-in production table.
+BUILT_IN_NETWORKS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        "eip155:46630": MappingProxyType(
+            {
+                "chainId": 46630,
+                "escrow": "eip155:46630:0x2723AD1fEC053Fe05305e4D0c874B0402959Ce18",
+                "asset": "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3",
+                "decimals": 6,
+                "rpcUrls": ["https://rpc.testnet.chain.robinhood.com", "https://robinhood-sepolia-rpc.publicnode.com"],
+            }
+        ),
+    }
+)
 
 
 def network_table(

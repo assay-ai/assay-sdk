@@ -156,7 +156,7 @@ def bind(c: Context, network: str | None) -> Flow[PaidCallsStatus]:
             raise PaymentNetworkUnknownError(
                 "eip155",
                 "no network is configured for this signer's namespace (eip155); pass networks= to Assay(...)"
-                " with an entry for your chain (production values ship with a later release)",
+                " with an entry for your chain",
             )
         raise PaymentNetworkUnknownError(nid)
     answer = yield from bind_evm_key(

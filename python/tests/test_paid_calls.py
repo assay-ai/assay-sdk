@@ -20,6 +20,8 @@ from tests.fake import ACCOUNT, BINDING, NOW, WEB, Answer, Fake, Seen
 
 CTX = BINDING["context"]
 CREDENTIAL = CTX["credentialId"]
+# The test chain; the built-in table adds a second eip155 network, so bind() names it.
+NET = CTX["network"]
 CAIP10 = f"{CTX['network']}:{ACCOUNT.address}"
 APPROVAL = f"https://app.example.test/agents/enable-paid?credential={CREDENTIAL}"
 
@@ -69,7 +71,7 @@ def test_status_unbound_with_link_and_fingerprint() -> None:
 def test_bind_then_wait_until_active() -> None:
     fake = Fake(api=delegate_api())
     client = fake.client()
-    setup = client.paid_calls.bind()
+    setup = client.paid_calls.bind(network=NET)
     assert setup.already_bound is False and setup.state == "pending_approval"
     assert setup.bind_status == "ACTIVE"
     assert setup.delegate == ACCOUNT.address
@@ -96,8 +98,8 @@ def test_bind_then_wait_until_active() -> None:
 def test_bind_is_noop_when_bound() -> None:
     fake = Fake(api=delegate_api(0))
     client = fake.client()
-    client.paid_calls.bind()
-    assert client.paid_calls.bind().already_bound is True
+    client.paid_calls.bind(network=NET)
+    assert client.paid_calls.bind(network=NET).already_bound is True
     assert fake.signer.calls == 1
 
 
@@ -105,7 +107,7 @@ BUILT = f"{WEB}/agents/enable-paid?credential={CREDENTIAL}#key={ACCOUNT.address}
 
 
 def test_approval_url_built_from_web_url_without_server_link() -> None:
-    assert Fake(api=delegate_api(2, None)).client().paid_calls.bind().approval_url == BUILT
+    assert Fake(api=delegate_api(2, None)).client().paid_calls.bind(network=NET).approval_url == BUILT
 
 
 def test_server_link_for_another_credential_is_not_used() -> None:
@@ -127,21 +129,20 @@ def test_wait_times_out() -> None:
         return clock["t"]
 
     client = Fake(api=delegate_api(1000)).client(now=now)
-    client.paid_calls.bind()
+    client.paid_calls.bind(network=NET)
     clock["tick"] = True
     with pytest.raises(AssayError) as err:
         client.paid_calls.wait_until_active(timeout=300)
     assert err.value.code == "WAIT_TIMEOUT"
 
 
-def test_bind_with_no_network_configured_says_so() -> None:
+def test_bind_on_a_network_not_in_the_table_names_it() -> None:
     fake = Fake(api=delegate_api())
     with pytest.raises(PaymentNetworkUnknownError) as err:
-        fake.client(pinned=False).paid_calls.bind()
-    msg = str(err.value)
+        fake.client(pinned=False).paid_calls.bind(network=NET)
     assert err.value.guard == "G2"
-    assert "no network is configured for this signer's namespace" in msg and "networks=" in msg
-    assert "the network eip155 " not in msg
+    assert err.value.network == NET
+    assert "networks=" in str(err.value)
     assert fake.signer.calls == 0
 
 
@@ -151,7 +152,7 @@ def test_scope_missing_status_defaults_to_403_even_when_passed_none() -> None:
 
 def test_bind_needs_a_signer() -> None:
     with pytest.raises(ConfigError):
-        Fake(api=delegate_api()).client(with_signer=False).paid_calls.bind()
+        Fake(api=delegate_api()).client(with_signer=False).paid_calls.bind(network=NET)
 
 
 # --- replacing a bound key ----------------------------------------------------------------
@@ -227,7 +228,7 @@ def test_status_with_another_key_bound() -> None:
 def test_rebind_is_pending_then_wait_until_promoted() -> None:
     fake = Fake(api=rebind_api())
     client = fake.client()
-    setup = client.paid_calls.bind()
+    setup = client.paid_calls.bind(network=NET)
     assert setup.already_bound is False and setup.bind_status == "PENDING_APPROVAL"
     assert setup.state == "pending_approval" and setup.delegate == OTHER
     assert setup.pending_delegate == ACCOUNT.address
@@ -243,8 +244,8 @@ def test_rebind_is_pending_then_wait_until_promoted() -> None:
 def test_rebind_again_while_pending_is_noop() -> None:
     fake = Fake(api=rebind_api(1000))
     client = fake.client()
-    client.paid_calls.bind()
-    again = client.paid_calls.bind()
+    client.paid_calls.bind(network=NET)
+    again = client.paid_calls.bind(network=NET)
     assert again.already_bound is True and again.bind_status == "PENDING_APPROVAL"
     assert fake.signer.calls == 1
 
@@ -259,7 +260,7 @@ def test_rebind_again_while_pending_is_noop() -> None:
 def test_bind_answer_not_naming_this_key_in_its_slot_is_refused(answer: dict[str, Any]) -> None:
     api = rebind_api(2, Answer({"data": {"credentialId": CREDENTIAL, **answer}}))
     with pytest.raises(AssayError) as err:
-        Fake(api=api).client().paid_calls.bind()
+        Fake(api=api).client().paid_calls.bind(network=NET)
     assert err.value.code == "BINDING_NOT_ACCEPTED"
 
 
@@ -269,7 +270,7 @@ def test_delegate_already_bound_is_typed() -> None:
         "error": {"code": "ACCOUNT_DELEGATE_ALREADY_BOUND", "message": "bound elsewhere", "statusCode": 409},
     }
     with pytest.raises(DelegateAlreadyBoundError) as err:
-        Fake(api=rebind_api(2, Answer(body, 409))).client().paid_calls.bind()
+        Fake(api=rebind_api(2, Answer(body, 409))).client().paid_calls.bind(network=NET)
     assert err.value.code == "ACCOUNT_DELEGATE_ALREADY_BOUND" and err.value.status == 409
 
 
@@ -291,13 +292,13 @@ def test_bind_conflict_is_typed_and_one_more_bind_parks_the_key() -> None:
     fake = Fake(api=api)
     client = fake.client()
     with pytest.raises(DelegateBindConflictError) as err:
-        client.paid_calls.bind()
+        client.paid_calls.bind(network=NET)
     assert err.value.code == "ACCOUNT_DELEGATE_BIND_CONFLICT" and err.value.status == 409
     assert err.value.retryable is True
     # Not retried by the SDK: one bind request, one signature.
     assert binds["n"] == 1 and fake.signer.calls == 1
 
-    again = client.paid_calls.bind()
+    again = client.paid_calls.bind(network=NET)
     assert again.already_bound is False and again.bind_status == "PENDING_APPROVAL"
     assert again.pending_delegate == ACCOUNT.address
     assert len([s for s in fake.seen if s.url.endswith("/agents/me/delegate/challenge")]) == 2
@@ -322,5 +323,5 @@ def test_bind_without_payments_scope_is_scope_missing() -> None:
         return inner(req)  # type: ignore[no-any-return]
 
     with pytest.raises(ScopeMissingError) as err:
-        Fake(api=api).client().paid_calls.bind()
+        Fake(api=api).client().paid_calls.bind(network=NET)
     assert err.value.required_scope == "payments"
