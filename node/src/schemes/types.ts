@@ -48,5 +48,5 @@ export interface PaymentScheme {
   /** Runs every local guard and builds the voucher. Nothing is signed here. */
   prepare(input: PrepareInput): Promise<Prepared>;
   /** Told about a server refusal of a signed voucher (for example a revoked key). */
-  onRefused(code: string, input: PrepareInput): void;
+  onRefused(code: string, input: PrepareInput): Promise<void>;
 }

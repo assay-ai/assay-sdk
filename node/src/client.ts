@@ -3,25 +3,22 @@ import { ChainReader } from "./core/chain.js";
 import { ConfigError } from "./errors.js";
 import { Http, silentLogger, type FetchLike, type Logger } from "./http.js";
 import { McpTransport } from "./mcp.js";
+import { networkTable } from "./networks.js";
 import { PaidCalls } from "./resources/paid-calls.js";
 import { QuoteCache, type ClientContext, type OnPayment } from "./resources/context.js";
 import { Receipts } from "./resources/receipts.js";
 import { Tools } from "./resources/tools.js";
 import { RestClient } from "./rest.js";
-import {
-  checkLimits,
-  DEFAULT_LIMITS,
-  Eip155Scheme,
-  eip155Networks,
-  type Eip155Network,
-  type Limits,
-} from "./schemes/eip155/index.js";
+import { checkLimits, DEFAULT_LIMITS, Eip155Scheme, type Eip155Network, type Limits } from "./schemes/eip155/index.js";
+import type { NetworkEntry } from "./schemes/eip155/index.js";
 import type { PaymentScheme } from "./schemes/types.js";
 import { signerNamespace, type Signer } from "./signer.js";
 import { VERSION } from "./version.js";
 
 export const DEFAULT_MCP_URL = "https://mcp.goassay.ai/";
 export const DEFAULT_API_URL = "https://api.goassay.ai/api/v1";
+/** The web app, where a person approves a payment key. */
+export const DEFAULT_WEB_URL = "https://portal.goassay.ai";
 
 export interface AssayOptions {
   /** Your Assay API key. Default: the `ASSAY_API_KEY` environment variable. */
@@ -34,12 +31,21 @@ export interface AssayOptions {
   signer?: Signer;
   /** Several signers; a payment uses the one whose namespace matches the requirement's network. */
   signers?: Signer[];
+  /** The web app, for the payment-key approval link. Default `https://portal.goassay.ai`. */
+  webUrl?: string;
   /**
-   * Your own table of payment networks, keyed by CAIP-2 (`eip155:<chainId>`): escrow, asset,
-   * decimals and RPC URLs. Paid calls are checked against it, never against what the server says.
+   * Payment networks you configure, keyed by CAIP-2 (`eip155:<chainId>`): chainId, escrow, asset,
+   * decimals and RPC URLs, for example a test chain or another deployment (with its own `mcpUrl`,
+   * `apiUrl` and `webUrl`). Merged over the SDK's built-in table: a new network is added, and an
+   * entry for a built-in network replaces it whole. Never read from the server.
    */
   networks?: Record<string, Eip155Network>;
-  /** Local spend limits in dollars. Default `{maxPerCall: "0.50", maxPerDay: "5"}`. */
+  /** Your own RPC URLs for a network, replacing the table's public ones: `{"eip155:<id>": [url]}`. */
+  rpcUrls?: Record<string, string[]>;
+  /**
+   * Local spend limits in dollars, checked before every signature (G7), per signing key and per
+   * process. Default `{maxPerCall: "0.50", maxPerDay: "5"}` (rolling 24 hours).
+   */
   limits?: Limits;
   /** Called before each voucher is signed, after every local check passed. Return `false` to refuse. */
   onPayment?: OnPayment;
@@ -82,6 +88,8 @@ export class Assay {
   readonly tools: Tools;
   readonly receipts: Receipts;
   readonly paidCalls: PaidCalls;
+  /** The payment network table in use: the built-in one with `networks` merged, after `rpcUrls`. */
+  readonly networks: ReadonlyMap<string, NetworkEntry>;
   readonly #mcpUrl: string;
 
   constructor(options: AssayOptions = {}) {
@@ -91,6 +99,7 @@ export class Assay {
     const mcpUrl = options.mcpUrl ?? DEFAULT_MCP_URL;
     const apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "");
     const origins = [originOf("mcpUrl", mcpUrl), originOf("apiUrl", apiUrl)];
+    const webOrigin = originOf("webUrl", options.webUrl ?? DEFAULT_WEB_URL);
 
     const signers = [...(options.signer ? [options.signer] : []), ...(options.signers ?? [])];
     for (const s of signers) {
@@ -118,17 +127,20 @@ export class Assay {
       sleep,
       userAgent: `goassay-node/${VERSION} node/${process.versions.node}`,
     });
-    const mcp = new McpTransport(http, mcpUrl, { name: "goassay-node", version: VERSION });
-    const networks = eip155Networks(options.networks ?? {});
+    const mcp = new McpTransport(http, mcpUrl, { name: "goassay-node", version: VERSION }, now);
+    const api = new RestClient(http, apiUrl, now);
+    const networks = networkTable(options.networks, options.rpcUrls);
     const quotes = new QuoteCache(now);
     const schemes = new Map<string, PaymentScheme>();
     const ctx: ClientContext = {
       http,
       mcp,
-      api: new RestClient(http, apiUrl),
+      api,
       signers: Object.freeze(signers),
       schemes,
       networks,
+      webOrigin,
+      inFlight: new Map(),
       quotes,
       onPayment: options.onPayment,
       maxRetries,
@@ -138,6 +150,7 @@ export class Assay {
     this.tools = new Tools(ctx);
     this.receipts = new Receipts(ctx);
     this.paidCalls = new PaidCalls(ctx);
+    this.networks = networks;
     if (signers.some((s) => s.namespace === "eip155")) {
       schemes.set(
         "eip155",

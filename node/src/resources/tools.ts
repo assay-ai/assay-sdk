@@ -25,6 +25,7 @@ import {
   ConfigError,
   errorFromServer,
   PaymentError,
+  PaymentNetworkUnknownError,
   PaymentRefusedError,
   PaymentRequiredError,
   PaymentSchemeUnsupportedError,
@@ -118,6 +119,11 @@ function toolError(e: Record<string, unknown>, result: Record<string, unknown>):
   });
 }
 
+function withKey(err: AssayError, key: string): AssayError {
+  err.idempotencyKey ??= key;
+  return err;
+}
+
 function toResult(result: Record<string, unknown>, idempotencyKey: string): ToolResult {
   const meta = isObject(result._meta) ? result._meta : {};
   const receipt = isObject(meta[RECEIPT_META]) ? (meta[RECEIPT_META] as CallReceipt) : null;
@@ -133,13 +139,17 @@ function toResult(result: Record<string, unknown>, idempotencyKey: string): Tool
 
 /** Tools over MCP: search, describe and call, with paid calls signed by the caller's signer. */
 export class Tools {
-  constructor(private readonly c: ClientContext) {}
+  readonly #c: ClientContext;
+
+  constructor(context: ClientContext) {
+    this.#c = context;
+  }
 
   /** `search_tools`: tools this URL can run, by what they do. Free. */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult> {
     const out = await this.#meta(SEARCH_TOOLS, { query, ...options });
     const results = Array.isArray(out.results)
-      ? (out.results as unknown[]).filter((r): r is ToolSummary => isObject(r) && typeof r.name === "string")
+      ? (out.results as unknown[]).filter((r): r is ToolSummary => isObject(r) && isToolName(r.name))
       : [];
     for (const r of results) this.#remember(r.name, quoteOf(r.assayPrice));
     return { results, nextCursor: typeof out.nextCursor === "string" ? out.nextCursor : null };
@@ -164,8 +174,30 @@ export class Tools {
     if (!isObject(args)) throw new ConfigError("arguments must be an object");
     const key = options.idempotencyKey ?? randomUUID();
     if (!isIdempotencyKey(key)) throw new ConfigError("idempotencyKey must be 1 to 128 printable ASCII characters");
+    // One logical call per key in this client: a second call with the key while the first runs
+    // waits for it, so at most one voucher is ever signed for it.
+    const fingerprint = JSON.stringify([name, args]);
+    const running = this.#c.inFlight.get(key);
+    if (running) {
+      if (running.fingerprint !== fingerprint) {
+        throw withKey(new AssayError("IDEMPOTENCY_KEY_REUSED", "this idempotency key is in use for another call"), key);
+      }
+      return running.promise as Promise<ToolResult>;
+    }
+    const promise = this.#call(name, args, key).catch((err: unknown) => {
+      throw err instanceof AssayError ? withKey(err, key) : err;
+    });
+    this.#c.inFlight.set(key, { fingerprint, promise });
+    try {
+      return await promise;
+    } finally {
+      this.#c.inFlight.delete(key);
+    }
+  }
+
+  async #call(name: string, args: Record<string, unknown>, key: string): Promise<ToolResult> {
     const params = { name, arguments: args, _meta: { [IDEMPOTENCY_META]: key } };
-    const calledAt = Math.floor(this.c.now() / 1000);
+    const calledAt = Math.floor(this.#c.now() / 1000);
     const first = await this.#send(params);
     const refusal = assayErrorOf(first);
     if (refusal === null) return toResult(first, key);
@@ -175,13 +207,13 @@ export class Tools {
       throw toolError(refusal, first);
 
     const fixUrl = typeof refusal.fixUrl === "string" ? { fixUrl: refusal.fixUrl } : {};
-    if (this.c.signers.length === 0) {
+    if (this.#c.signers.length === 0) {
       throw new PaymentRequiredError(`${name} is a paid tool and this client has no signer`, requirement, fixUrl);
     }
     const network = isObject(requirement) && typeof requirement.network === "string" ? requirement.network : "unknown";
     const ns = namespaceOf(network);
-    const signer = this.c.signers.find((s) => s.namespace === ns);
-    const scheme = ns === null ? undefined : this.c.schemes.get(ns);
+    const signer = this.#c.signers.find((s) => s.namespace === ns);
+    const scheme = ns === null ? undefined : this.#c.schemes.get(ns);
     if (!signer || !scheme) throw new PaymentSchemeUnsupportedError(network);
 
     const tool = name === CALL_TOOL ? args.name : name;
@@ -189,12 +221,15 @@ export class Tools {
       throw new PaymentRefusedError("G1", "G1_NOT_FORWARDED", "the paid tool's name is not readable");
     const input: PrepareInput = { requirement, tool, calledAt, signer, idempotencyKey: key };
     const prepared = await scheme.prepare(input);
-    if (!prepared.ok) throw new PaymentRefusedError(prepared.guard, prepared.code, prepared.reason, fixUrl);
+    if (!prepared.ok) {
+      if (prepared.code === "G2_NETWORK") throw new PaymentNetworkUnknownError(network);
+      throw new PaymentRefusedError(prepared.guard, prepared.code, prepared.reason, fixUrl);
+    }
 
-    if (this.c.onPayment) {
+    if (this.#c.onPayment) {
       let verdict: boolean | void;
       try {
-        verdict = await this.c.onPayment(Object.freeze({ ...prepared.details }));
+        verdict = await this.#c.onPayment(Object.freeze({ ...prepared.details }));
       } catch (err) {
         prepared.release();
         throw err;
@@ -215,16 +250,17 @@ export class Tools {
     const paid = await this.#send({ ...params, _meta: { ...params._meta, [VOUCHER_META]: envelope } });
     const after = assayErrorOf(paid);
     if (after === null) return toResult(paid, key);
-    scheme.onRefused(after.code as string, input);
+    await scheme.onRefused(after.code as string, input);
     throw toolError(after, paid);
   }
 
   /** One `tools/call`; an `IDEMPOTENCY_IN_PROGRESS` answer waits and sends the same request again. */
   async #send(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     for (let attempt = 0; ; attempt++) {
-      const result = await this.c.mcp.request("tools/call", params);
+      const result = await this.#c.mcp.request("tools/call", params);
       const e = assayErrorOf(result);
-      if (e?.code !== IN_PROGRESS_CODE || attempt >= this.c.maxRetries) return result;
+      // The first attempt still runs, or a refusal-rate limit: wait and send the same bytes again.
+      if ((e?.code !== IN_PROGRESS_CODE && e?.code !== "RATE_LIMITED") || attempt >= this.#c.maxRetries) return result;
       const wait =
         typeof e.retryAfterMs === "number"
           ? e.retryAfterMs
@@ -232,7 +268,7 @@ export class Tools {
             ? e.retryAfter * 1000
             : 1000;
       if (wait > MAX_RETRY_AFTER_MS) return result;
-      await this.c.sleep(wait);
+      await this.#c.sleep(wait);
     }
   }
 
@@ -246,16 +282,16 @@ export class Tools {
   }
 
   #remember(name: string, quote: PriceQuote | null): void {
-    if (quote) this.c.quotes.set(name, quote);
+    if (quote) this.#c.quotes.set(name, quote);
   }
 
   /** G3: the cached quote, or a fresh `get_tool` just before signing. */
   async quoteFor(tool: string): Promise<PriceQuote | null> {
-    const cached = this.c.quotes.get(tool);
+    const cached = this.#c.quotes.get(tool);
     if (cached) return cached;
     try {
       const info = await this.get(tool);
-      return info.name === tool ? this.c.quotes.get(tool) : null;
+      return info.name === tool ? this.#c.quotes.get(tool) : null;
     } catch {
       return null;
     }

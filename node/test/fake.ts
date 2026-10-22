@@ -21,6 +21,7 @@ export const NOW_MS = BASE.nowSeconds * 1000;
 export const MCP = "https://mcp.example.test/";
 export const API = "https://api.example.test/api/v1";
 export const RPC = "https://rpc.example.test/";
+export const WEB = "https://app.example.test";
 export const TOOL = "weather_forecast";
 
 export const NETWORKS = {
@@ -28,7 +29,7 @@ export const NETWORKS = {
     escrow: BASE.network.escrow,
     asset: BASE.network.asset,
     decimals: BASE.network.decimals,
-    rpc: [RPC],
+    rpcUrls: [RPC],
   },
 };
 
@@ -97,6 +98,8 @@ export function fakeClient(o: {
   api?: Handler;
   options?: Partial<AssayOptions>;
   signer?: boolean;
+  /** Pass the vectors' network table as `networks` (default), or use the built-in (empty) table. */
+  pinned?: boolean;
 }) {
   const seen: Seen[] = [];
   const signTypedData = vi.fn((td: never) => KEY.signTypedData(td));
@@ -113,7 +116,7 @@ export function fakeClient(o: {
         status: a.status ?? 200,
         headers: { "content-type": "application/json", date, ...a.headers },
       });
-    if (url === RPC) return respond({ body: rpcAnswer(body) });
+    if (url.startsWith("https://rpc")) return respond({ body: rpcAnswer(body) });
     if (url === MCP) {
       const out = o.mcp?.(body.params, req);
       if (out && typeof out === "object" && "body" in out) return respond(out as Answer);
@@ -135,7 +138,8 @@ export function fakeClient(o: {
     fetch,
     sleep,
     now: () => NOW_MS,
-    networks: NETWORKS,
+    webUrl: WEB,
+    ...(o.pinned === false ? {} : { networks: NETWORKS }),
     ...(o.signer === false ? {} : { signer }),
     ...o.options,
   });

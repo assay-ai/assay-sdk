@@ -1,10 +1,12 @@
-export { Assay, DEFAULT_API_URL, DEFAULT_MCP_URL, type AssayOptions } from "./client.js";
+export { Assay, DEFAULT_API_URL, DEFAULT_MCP_URL, DEFAULT_WEB_URL, type AssayOptions } from "./client.js";
+export { BUILT_IN_NETWORKS } from "./networks.js";
 export {
   AssayError,
   AuthError,
   ConfigError,
   NetworkError,
   PaymentError,
+  PaymentNetworkUnknownError,
   PaymentRefusedError,
   PaymentRequiredError,
   PaymentSchemeUnsupportedError,

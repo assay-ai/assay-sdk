@@ -50,6 +50,9 @@ export async function bindEvmKey(o: {
     }
     const challengeId = (challenge.data as Record<string, unknown>).challengeId as string;
     const signature = await o.signer.signTypedData(typedData as never);
+    if (typeof signature !== "string" || !/^0x[0-9a-fA-F]{130}$/.test(signature)) {
+      throw new PaymentError("SIGNER_FAILED", "the signer did not return a 65-byte signature");
+    }
     const bound = await o.api.post("/agents/me/delegate", { challengeId, signature });
     const data = isObject(bound.data) ? bound.data : {};
     const names = (v: unknown) => {

@@ -21,7 +21,11 @@ export interface Receipt {
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export class Receipts {
-  constructor(private readonly c: ClientContext) {}
+  readonly #c: ClientContext;
+
+  constructor(context: ClientContext) {
+    this.#c = context;
+  }
 
   /**
    * The receipt of a call, by its intent id (`result.receipt.intentId`). Needs the
@@ -29,7 +33,7 @@ export class Receipts {
    */
   async get(intentId: string): Promise<Receipt> {
     if (typeof intentId !== "string" || !UUID.test(intentId)) throw new ConfigError("intentId must be a UUID");
-    const { data } = await this.c.api.get(`/receipts/${intentId}`);
+    const { data } = await this.#c.api.get(`/receipts/${intentId}`);
     if (!isObject(data) || typeof data.intentId !== "string")
       throw new ServerError("API_BAD_ANSWER", "the receipt answer is not readable");
     return data as Receipt;

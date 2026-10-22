@@ -16,15 +16,17 @@ import { ConfigError } from "../../errors.js";
 import type { EvmSigner } from "../../signer.js";
 import type { PaymentScheme, Prepared, PrepareInput } from "../types.js";
 
-/** The caller's own entry for one EVM network. Never taken from the server. */
+/** One EVM network: built into the SDK, or configured by the caller. */
 export interface Eip155Network {
+  /** The chain id; when given it must be the one in the CAIP-2 key. */
+  chainId?: number;
   /** CAIP-10 of the escrow (the EIP-712 `verifyingContract`). */
   escrow: string;
   /** CAIP-19 erc20 asset. */
   asset: string;
   decimals: number;
   /** JSON-RPC URLs for the chain reads of G4/G6. Every one must agree. */
-  rpc: string[];
+  rpcUrls: string[];
 }
 
 export interface NetworkEntry {
@@ -45,27 +47,31 @@ export interface Limits {
 
 export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({ maxPerCall: "0.50", maxPerDay: "5" });
 
-/** Checks and freezes the caller's network table. */
-export function eip155Networks(table: Record<string, Eip155Network>): Map<string, NetworkEntry> {
+/**
+ * Checks and freezes a network table. `fail` makes the error: a `ConfigError` for the caller's
+ * own table, a server error for one the API sent. Non-eip155 entries are skipped.
+ */
+export function eip155Networks(
+  table: Record<string, Eip155Network>,
+  fail: (message: string) => Error = (m) => new ConfigError(m),
+): Map<string, NetworkEntry> {
   const out = new Map<string, NetworkEntry>();
   for (const [id, n] of Object.entries(table)) {
     if (!id.startsWith("eip155:")) continue;
     const chainId = eip155ChainId(id);
     const escrow = typeof n?.escrow === "string" ? parseCaip10(n.escrow) : null;
     const asset = typeof n?.asset === "string" ? parseCaip19Erc20(n.asset) : null;
-    if (chainId === null) throw new ConfigError(`networks: ${id} is not a CAIP-2 eip155 chain`);
+    if (chainId === null) throw fail(`networks: ${id} is not a CAIP-2 eip155 chain`);
+    if (n?.chainId !== undefined && n.chainId !== chainId) throw fail(`networks.${id}.chainId is not ${chainId}`);
     if (!escrow || escrow.chainId !== chainId)
-      throw new ConfigError(`networks.${id}.escrow must be a checksummed CAIP-10 account on ${id}`);
+      throw fail(`networks.${id}.escrow must be a checksummed CAIP-10 account on ${id}`);
     if (!asset || asset.chainId !== chainId)
-      throw new ConfigError(`networks.${id}.asset must be a checksummed CAIP-19 erc20 asset on ${id}`);
+      throw fail(`networks.${id}.asset must be a checksummed CAIP-19 erc20 asset on ${id}`);
     if (!Number.isInteger(n.decimals) || n.decimals < 0 || n.decimals > 36)
-      throw new ConfigError(`networks.${id}.decimals is invalid`);
-    if (
-      !Array.isArray(n.rpc) ||
-      n.rpc.length === 0 ||
-      !n.rpc.every((u) => typeof u === "string" && isUsableRpcUrl(u))
-    ) {
-      throw new ConfigError(`networks.${id}.rpc must list at least one https RPC URL`);
+      throw fail(`networks.${id}.decimals is invalid`);
+    const rpc = n.rpcUrls;
+    if (!Array.isArray(rpc) || rpc.length === 0 || !rpc.every((u) => typeof u === "string" && isUsableRpcUrl(u))) {
+      throw fail(`networks.${id}.rpcUrls must list at least one https RPC URL`);
     }
     out.set(
       id,
@@ -76,7 +82,7 @@ export function eip155Networks(table: Record<string, Eip155Network>): Map<string
         escrowCaip10: n.escrow,
         asset: n.asset,
         decimals: n.decimals,
-        rpc: Object.freeze([...n.rpc]),
+        rpc: Object.freeze([...rpc]),
       }),
     );
   }
@@ -159,17 +165,32 @@ export function guardAndBuild(
 }
 
 const SPEND_WINDOW_SECONDS = 86_400;
-/** Vouchers signed in this process, by key: every client using one key shares one 24 h cap. */
+/**
+ * Vouchers signed in this process, by key: every client using one key shares one 24 h cap. One
+ * array per key, only ever changed in place, so a reservation is always released from the list
+ * the guards read. Per process only: not shared across worker threads or restarts; the
+ * on-chain caps are the bound across processes.
+ */
 const LEDGER = new Map<string, SignedVoucher[]>();
 
 function spentBy(address: string, nowSeconds: number): SignedVoucher[] {
   const key = address.toLowerCase();
-  const kept = (LEDGER.get(key) ?? []).filter((e) => e.at > nowSeconds - SPEND_WINDOW_SECONDS);
-  LEDGER.set(key, kept);
-  return kept;
+  let list = LEDGER.get(key);
+  if (list === undefined) {
+    list = [];
+    LEDGER.set(key, list);
+  }
+  for (let i = list.length - 1; i >= 0; i--) if (list[i]!.at <= nowSeconds - SPEND_WINDOW_SECONDS) list.splice(i, 1);
+  return list;
+}
+
+/** Tests only: forget every signed voucher of this process. */
+export function resetSpendLedger(): void {
+  LEDGER.clear();
 }
 
 export interface Eip155SchemeOptions {
+  /** The network table: built into the SDK, or the caller's for non-production environments. */
   networks: ReadonlyMap<string, NetworkEntry>;
   limits: Limits;
   chain: ChainReader;
@@ -202,9 +223,27 @@ export class Eip155Scheme implements PaymentScheme {
     } catch {
       return { ok: false, guard: "G5", code: "G5_LOCAL_KEY_INVALID", reason: "the signer's address is not readable" };
     }
+    const networks = this.o.networks;
     const req = isObject(input.requirement) ? input.requirement : null;
-    const entry = req && typeof req.network === "string" ? this.o.networks.get(req.network) : undefined;
+    const entry = req && typeof req.network === "string" ? networks.get(req.network) : undefined;
     const payer = entry ? accountOn(req?.payer, entry.chainId) : null;
+    // Before any chain read, as the reference does: these refusals say what to do.
+    if (entry && payer === localKey) {
+      return {
+        ok: false,
+        guard: "G5",
+        code: "G5_LOCAL_KEY_IS_PAYER",
+        reason: "the signer is the payer; use a dedicated payment key",
+      };
+    }
+    if (entry && accountOn(req?.delegate, entry.chainId) !== localKey) {
+      return {
+        ok: false,
+        guard: "G5",
+        code: "G5_DELEGATE_MISMATCH",
+        reason: "this signer is not the payment key bound to this API key; call paidCalls.bind() and approve it",
+      };
+    }
     const chain = entry && payer ? await this.o.chain.read(entry, payer, localKey) : null;
     const quote = await this.o.quote(input.tool);
 
@@ -230,7 +269,7 @@ export class Eip155Scheme implements PaymentScheme {
       paidUrls: [this.o.mcpUrl],
       nowSeconds,
     };
-    const built = guardAndBuild(ctx, correctedNow(nowSeconds, this.o.dateOffset()), this.o.networks);
+    const built = guardAndBuild(ctx, correctedNow(nowSeconds, this.o.dateOffset()), networks);
     if (!built.ok) {
       if ((built.guard === "G4" || built.guard === "G6") && entry && payer)
         this.o.chain.invalidate(entry.id, payer, localKey);
@@ -264,16 +303,18 @@ export class Eip155Scheme implements PaymentScheme {
         return voucherEnvelope(built.wire, signature, providerId, r.contractVersion);
       },
       release: () => {
-        const i = signed.indexOf(reserved);
-        if (i !== -1) signed.splice(i, 1);
+        const list = spentBy(localKey, Math.floor(this.o.now() / 1000));
+        const i = list.indexOf(reserved);
+        if (i !== -1) list.splice(i, 1);
       },
     };
   }
 
-  onRefused(code: string, input: PrepareInput): void {
+  async onRefused(code: string, input: PrepareInput): Promise<void> {
     if (code !== "PAYMENT_VOUCHER_DELEGATE_INACTIVE") return;
     const req = isObject(input.requirement) ? input.requirement : null;
-    const entry = req && typeof req.network === "string" ? this.o.networks.get(req.network) : undefined;
+    const networks = this.o.networks;
+    const entry = req && typeof req.network === "string" ? networks.get(req.network) : undefined;
     const payer = entry ? accountOn(req?.payer, entry.chainId) : null;
     if (entry && payer) this.o.chain.invalidate(entry.id, payer, getAddress(input.signer.address));
   }

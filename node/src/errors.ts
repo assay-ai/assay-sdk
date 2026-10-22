@@ -12,6 +12,7 @@
  * │   ├─ PaymentRequiredError         the tool is paid and no signer was given (.requirement)
  * │   ├─ PaymentSchemeUnsupportedError no signer for the requirement's network (.network)
  * │   └─ PaymentRefusedError          refused locally before signing (.guard); nothing signed
+ * │       └─ PaymentNetworkUnknownError the network is not in the SDK's network table (.network)
  * ├─ RateLimitError                   429, RATE_LIMITED, quota or velocity limits (.retryAfterMs)
  * ├─ NetworkError                     no answer: connection failure
  * │   └─ TimeoutError
@@ -39,6 +40,12 @@ export class AssayError extends Error {
   readonly fixUrl: string | undefined;
   /** Extra structured data the server sent (never a key or a signature). */
   readonly details: Record<string, unknown> | undefined;
+  /**
+   * On an error out of `tools.call`: the idempotency key of that logical call. Call again with
+   * `{ idempotencyKey: err.idempotencyKey }` to retry safely: Assay replays a served call instead
+   * of charging it twice.
+   */
+  idempotencyKey: string | undefined;
 
   constructor(code: string, message: string, init: AssayErrorInit = {}) {
     super(message, init.cause === undefined ? undefined : { cause: init.cause });
@@ -47,6 +54,7 @@ export class AssayError extends Error {
     this.status = init.status;
     this.fixUrl = init.fixUrl;
     this.details = init.details;
+    this.idempotencyKey = undefined;
   }
 }
 
@@ -102,6 +110,20 @@ export class PaymentRefusedError extends PaymentError {
   constructor(guard: string, code: string, reason: string, init: AssayErrorInit = {}) {
     super(code, `payment refused before signing: ${reason}`, init);
     this.guard = guard;
+  }
+}
+
+export class PaymentNetworkUnknownError extends PaymentRefusedError {
+  override name = "PaymentNetworkUnknownError";
+  /** The CAIP-2 network asked for. */
+  readonly network: string;
+  constructor(network: string) {
+    super(
+      "G2",
+      "G2_NETWORK",
+      `the network ${network} is not in this SDK's network table (production values ship with a later release; pass networks for a non-production environment)`,
+    );
+    this.network = network;
   }
 }
 

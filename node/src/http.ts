@@ -83,6 +83,14 @@ function rpcRateLimit(text: string): { retryAfterMs: number | undefined } | unde
   }
 }
 
+class RedirectRefused extends Error {}
+
+/** `fetch` with `redirect: "error"` rejects a redirect with a TypeError whose cause says so. */
+function isRedirectError(err: unknown): boolean {
+  const cause = err instanceof Error ? (err.cause as { message?: unknown } | undefined) : undefined;
+  return typeof cause?.message === "string" && /redirect/i.test(cause.message);
+}
+
 /**
  * One origin-pinned HTTP client for the MCP and API hosts: the bearer goes only to the configured
  * origins, redirects are an error, every attempt has a timeout, and retries back off and honour
@@ -121,8 +129,19 @@ export class Http {
           redirect: "error",
           signal,
         });
+        // Also refuse a redirect an injected fetch followed: the bearer must not leave the origin.
+        if (
+          res.redirected ||
+          (res.url !== "" && new URL(res.url).origin !== url.origin) ||
+          (res.status >= 300 && res.status < 400)
+        ) {
+          await res.body?.cancel().catch(() => undefined);
+          throw new RedirectRefused();
+        }
         text = await res.text();
       } catch (err) {
+        if (err instanceof RedirectRefused || isRedirectError(err))
+          throw new NetworkError("refusing to follow a redirect", err, "REDIRECT_REFUSED");
         const timedOut = signal.aborted;
         this.#log(req, attempt, { error: timedOut ? "timeout" : "network" }, started);
         if (!last) {

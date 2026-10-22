@@ -17,6 +17,10 @@ export interface ClientContext {
   readonly signers: readonly Signer[];
   readonly schemes: ReadonlyMap<string, PaymentScheme>;
   readonly networks: ReadonlyMap<string, NetworkEntry>;
+  /** The web app origin, where a person approves a payment key. */
+  readonly webOrigin: string;
+  /** Logical calls in flight, by idempotency key (one voucher per logical call). */
+  readonly inFlight: Map<string, { fingerprint: string; promise: Promise<unknown> }>;
   readonly quotes: QuoteCache;
   readonly onPayment: OnPayment | undefined;
   readonly maxRetries: number;

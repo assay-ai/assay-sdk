@@ -16,6 +16,7 @@ export class McpTransport {
     private readonly http: Http,
     private readonly url: string,
     private readonly clientInfo: { name: string; version: string },
+    private readonly now: () => number = Date.now,
   ) {}
 
   /** Sends one request and returns its `result`. Network retries resend the same bytes. */
@@ -52,14 +53,14 @@ export class McpTransport {
     const msg = parseMessage(res.text, res.headers.get("content-type"));
     if (!isObject(msg) || msg.jsonrpc !== "2.0") {
       throw (
-        restError(res.status, res.text, res.headers.get("retry-after")) ??
+        restError(res.status, res.text, res.headers.get("retry-after"), this.now()) ??
         new ServerError("MCP_BAD_ANSWER", "Assay sent an answer the SDK cannot read", { status: res.status })
       );
     }
-    if (isObject(msg.error)) throw rpcError(msg.error, res.status, res.headers.get("retry-after"));
+    if (isObject(msg.error)) throw rpcError(msg.error, res.status, res.headers.get("retry-after"), this.now());
     if (!isObject(msg.result)) {
       throw (
-        restError(res.status, res.text, res.headers.get("retry-after")) ??
+        restError(res.status, res.text, res.headers.get("retry-after"), this.now()) ??
         new ServerError("MCP_BAD_ANSWER", "Assay sent an answer the SDK cannot read", { status: res.status })
       );
     }
@@ -83,11 +84,16 @@ function parseMessage(text: string, contentType: string | null): unknown {
   }
 }
 
-function rpcError(error: Record<string, unknown>, status: number, retryAfter: string | null): AssayError {
+function rpcError(
+  error: Record<string, unknown>,
+  status: number,
+  retryAfter: string | null,
+  nowMs: number,
+): AssayError {
   const message = typeof error.message === "string" ? error.message : "the MCP request failed";
   const data = isObject(error.data) ? error.data : {};
   if (error.code === RPC_RATE_LIMITED) {
-    const ms = typeof data.retryAfterMs === "number" ? data.retryAfterMs : retryAfterMs(retryAfter, Date.now());
+    const ms = typeof data.retryAfterMs === "number" ? data.retryAfterMs : retryAfterMs(retryAfter, nowMs);
     return new RateLimitError("RATE_LIMITED", message, { status, ...(ms !== undefined ? { retryAfterMs: ms } : {}) });
   }
   const code = typeof data.code === "string" ? data.code : `MCP_RPC_${String(error.code)}`;
@@ -95,7 +101,7 @@ function rpcError(error: Record<string, unknown>, status: number, retryAfter: st
 }
 
 /** The platform's REST error envelope (spec section 2.2) on a non-JSON-RPC answer, or `null`. */
-export function restError(status: number, text: string, retryAfter: string | null): AssayError | null {
+export function restError(status: number, text: string, retryAfter: string | null, nowMs: number): AssayError | null {
   let body: unknown;
   try {
     body = JSON.parse(text);
@@ -107,7 +113,7 @@ export function restError(status: number, text: string, retryAfter: string | nul
   const code = e && typeof e.code === "string" ? e.code : undefined;
   const message = e && typeof e.message === "string" ? e.message : `Assay answered HTTP ${status}`;
   const details = e && isObject(e.context) ? e.context : undefined;
-  const wait = retryAfterMs(retryAfter, Date.now());
+  const wait = retryAfterMs(retryAfter, nowMs);
   return errorFromServer(code, message, {
     status,
     ...(details ? { details } : {}),

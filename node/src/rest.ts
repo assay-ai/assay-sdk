@@ -14,6 +14,7 @@ export class RestClient {
   constructor(
     private readonly http: Http,
     private readonly base: string,
+    private readonly now: () => number = Date.now,
   ) {}
 
   /** GETs are retried; POSTs are not (a challenge or a bind is not resent blindly). */
@@ -34,7 +35,7 @@ export class RestClient {
     });
     if (res.status < 200 || res.status > 299) {
       throw (
-        restError(res.status, res.text, res.headers.get("retry-after")) ??
+        restError(res.status, res.text, res.headers.get("retry-after"), this.now()) ??
         new ServerError(`HTTP_${res.status}`, `Assay answered HTTP ${res.status}`, { status: res.status })
       );
     }

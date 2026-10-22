@@ -2,7 +2,7 @@ import { recoverTypedDataAddress, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
 import { AssayError, ConfigError } from "../src/index.js";
 import { checkBindingChallenge } from "../src/core/binding.js";
-import { BINDING, fakeClient, KEY, NOW_MS, type Seen } from "./fake.js";
+import { BINDING, fakeClient, KEY, NOW_MS, WEB, type Seen } from "./fake.js";
 
 const ctx = BINDING.context;
 const CREDENTIAL = ctx.credentialId as string;
@@ -87,16 +87,22 @@ describe("paidCalls", () => {
     expect(signTypedData).toHaveBeenCalledTimes(1);
   });
 
-  it("approvalUrl is null when the server sends none (no web origin is built in)", async () => {
+  const built = `${WEB}/agents/enable-paid?credential=${CREDENTIAL}#key=${KEY.address}`;
+
+  it("approvalUrl is built from webUrl when the server sends none", async () => {
     const { client } = fakeClient({ api: delegateApi(2, null) });
-    expect((await client.paidCalls.bind()).approvalUrl).toBeNull();
+    expect((await client.paidCalls.bind()).approvalUrl).toBe(built);
   });
 
-  it("a link for another credential is not used", async () => {
-    const { client } = fakeClient({
-      api: delegateApi(2, "https://app.example.test/agents/enable-paid?credential=other"),
-    });
-    expect((await client.paidCalls.status()).approvalUrl).toBeNull();
+  it("a server link for another credential is not used", async () => {
+    const { client } = fakeClient({ api: delegateApi(2, `${WEB}/agents/enable-paid?credential=other`) });
+    expect((await client.paidCalls.status()).approvalUrl).toBe(built);
+  });
+
+  it("a server link on another origin is not used", async () => {
+    const link = `https://look-alike.example.test/agents/enable-paid?credential=${CREDENTIAL}`;
+    const { client } = fakeClient({ api: delegateApi(2, link) });
+    expect((await client.paidCalls.status()).approvalUrl).toBe(built);
   });
 
   it("waitUntilActive stops at its timeout", async () => {

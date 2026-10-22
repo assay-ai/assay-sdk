@@ -1,12 +1,12 @@
 import { eip155ChainId, parseCaip10 } from "../core/caip.js";
 import { getAddress } from "../core/hex.js";
 import { fingerprint, isObject } from "../core/meta.js";
-import { AssayError, ConfigError, ServerError } from "../errors.js";
+import { AssayError, ConfigError, PaymentNetworkUnknownError, ServerError } from "../errors.js";
 import { bindEvmKey } from "../schemes/eip155/bind.js";
 import type { EvmSigner } from "../signer.js";
 import type { ClientContext } from "./context.js";
 
-export type PaidCallsState = "unbound" | "pending_approval" | "active" | "expired" | "bound_to_other_key";
+export type PaidCallsState = "unbound" | "pending_approval" | "active" | "expired" | "bound_to_other_key" | "unknown";
 
 export interface PaidCallsStatus {
   /**
@@ -14,7 +14,8 @@ export interface PaidCallsStatus {
    * - `pending_approval`: this key is bound (or waits) and a person has not approved it yet;
    * - `active`: paid calls are on for this key;
    * - `expired`: the approval lapsed; approve it again;
-   * - `bound_to_other_key`: another key is bound; `bind()` this one.
+   * - `bound_to_other_key`: another key is bound; `bind()` this one;
+   * - `unknown`: Assay could not read the key's grant from the chain just now; ask again.
    */
   state: PaidCallsState;
   credentialId: string;
@@ -29,7 +30,10 @@ export interface PaidCallsStatus {
     spentInWindow: string | null;
     validUntil: string | null;
   } | null;
-  /** Where a person approves this client's key, from the server; null when it sent none. */
+  /**
+   * Where a person approves this client's key: `{webUrl}/agents/enable-paid?credential=...#key=...`.
+   * The key travels only in the fragment. Null without a signer.
+   */
   approvalUrl: string | null;
   /** This client's key as the approval page shows it (`1A2B 9F3C`); null without a signer. */
   fingerprint: string | null;
@@ -47,7 +51,6 @@ export interface WaitOptions {
 }
 
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function addressOf(caip10: unknown): string | null {
   const p = typeof caip10 === "string" ? parseCaip10(caip10) : null;
@@ -55,34 +58,47 @@ function addressOf(caip10: unknown): string | null {
 }
 
 /**
- * The server's approval link with this key in the fragment (never sent to a server), or null.
- * Only an http(s) link for this credential is used.
+ * The approval link, with this key only in the fragment (browsers never send it to a server). A
+ * link the server sent is used only when it is on the configured web origin and names this
+ * credential; otherwise the link is built from the web origin.
  */
-function approvalLink(raw: unknown, credentialId: string, address: string | null): string | null {
-  if (typeof raw !== "string" || address === null) return null;
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return null;
+export function approvalLink(
+  webOrigin: string,
+  server: unknown,
+  credentialId: string,
+  address: string | null,
+): string | null {
+  if (address === null) return null;
+  let url: URL | null = null;
+  if (typeof server === "string") {
+    try {
+      const u = new URL(server);
+      if (u.origin === webOrigin && !u.username && !u.password && u.searchParams.get("credential") === credentialId)
+        url = u;
+    } catch {
+      url = null;
+    }
   }
-  const okScheme = url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK.has(url.hostname));
-  if (!okScheme || url.username || url.password || url.searchParams.get("credential") !== credentialId) return null;
+  url ??= new URL(`${webOrigin}/agents/enable-paid?credential=${encodeURIComponent(credentialId)}`);
   url.hash = `key=${address}`;
   return url.toString();
 }
 
 /** Binding a payment key for server-side integrators (spec section 5). */
 export class PaidCalls {
-  constructor(private readonly c: ClientContext) {}
+  readonly #c: ClientContext;
+
+  constructor(context: ClientContext) {
+    this.#c = context;
+  }
 
   #signer(): EvmSigner | null {
-    return this.c.signers.find((s): s is EvmSigner => s.namespace === "eip155") ?? null;
+    return this.#c.signers.find((s): s is EvmSigner => s.namespace === "eip155") ?? null;
   }
 
   /** Where paid calls stand for this API key and this client's signer. */
   async status(): Promise<PaidCallsStatus> {
-    const { data } = await this.c.api.get("/agents/me/delegate");
+    const { data } = await this.#c.api.get("/agents/me/delegate");
     if (!isObject(data) || typeof data.credentialId !== "string" || !UUID.test(data.credentialId)) {
       throw new ServerError("API_BAD_ANSWER", "the paid-call status is not readable");
     }
@@ -92,7 +108,8 @@ export class PaidCalls {
     const pending = addressOf(data.pendingDelegate);
     const paid = isObject(data.paidCalls) ? data.paidCalls : null;
     let state: PaidCallsState;
-    if (mine !== null && pending === mine) state = "pending_approval";
+    if (data.paidCallsUnknown === true && delegate !== null && (mine === null || delegate === mine)) state = "unknown";
+    else if (mine !== null && pending === mine) state = "pending_approval";
     else if (delegate === null) state = "unbound";
     else if (mine !== null && delegate !== mine) state = "bound_to_other_key";
     else if (paid?.status === "ACTIVE") state = "active";
@@ -112,7 +129,7 @@ export class PaidCalls {
             validUntil: str(paid.validUntil),
           }
         : null,
-      approvalUrl: approvalLink(data.approvalUrl, data.credentialId, mine),
+      approvalUrl: approvalLink(this.#c.webOrigin, data.approvalUrl, data.credentialId, mine),
       fingerprint: mine ? fingerprint(mine) : null,
     };
   }
@@ -129,31 +146,21 @@ export class PaidCalls {
     if (current.delegate === getAddress(signer.address) || current.pendingDelegate === getAddress(signer.address)) {
       return { ...current, alreadyBound: true };
     }
-    const evm = [...this.c.networks.keys()].filter((n) => n.startsWith("eip155:"));
+    const evm = [...this.#c.networks.keys()].filter((n) => n.startsWith("eip155:"));
     const network = options.network ?? (evm.length === 1 ? evm[0] : undefined);
-    const chainId = network === undefined ? null : eip155ChainId(network);
-    if (chainId === null || (network !== undefined && !this.c.networks.has(network))) {
-      throw new ConfigError("bind() needs one eip155 network in `networks`, or `network` naming one of them");
+    const chainId = network === undefined || !this.#c.networks.has(network) ? null : eip155ChainId(network);
+    if (chainId === null) {
+      if (network === undefined && evm.length > 1)
+        throw new ConfigError("bind() needs `network` naming one of the eip155 networks");
+      throw new PaymentNetworkUnknownError(network ?? "eip155");
     }
-    const answer = await bindEvmKey({
-      signer,
-      chainId,
-      credentialId: current.credentialId,
-      api: this.c.api,
-      now: this.c.now,
-    });
-    const after = await this.status();
-    return {
-      ...after,
-      approvalUrl:
-        after.approvalUrl ?? approvalLink(answer.approvalUrl, after.credentialId, getAddress(signer.address)),
-      alreadyBound: false,
-    };
+    await bindEvmKey({ signer, chainId, credentialId: current.credentialId, api: this.#c.api, now: this.#c.now });
+    return { ...(await this.status()), alreadyBound: false };
   }
 
   /** Polls until a person approved the key: every 5 s for 2 minutes, then every 15 s. */
   async waitUntilActive(options: WaitOptions = {}): Promise<PaidCallsStatus> {
-    const started = this.c.now();
+    const started = this.#c.now();
     const until = started + (options.timeoutMs ?? 15 * 60_000);
     for (;;) {
       if (options.signal?.aborted) throw new AssayError("ABORTED", "the wait was aborted");
@@ -163,10 +170,10 @@ export class PaidCalls {
       } catch (err) {
         if (!(err instanceof AssayError) || !err.retryable) throw err;
       }
-      const now = this.c.now();
+      const now = this.#c.now();
       if (now >= until)
         throw new AssayError("WAIT_TIMEOUT", "paid calls were not approved in time", { retryable: true });
-      await this.c.sleep(Math.min(until - now, now - started < 120_000 ? 5_000 : 15_000));
+      await this.#c.sleep(Math.min(until - now, now - started < 120_000 ? 5_000 : 15_000));
     }
   }
 }
