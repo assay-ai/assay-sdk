@@ -37,7 +37,8 @@ import type { ClientContext } from "./context.js";
 
 /** `_meta["assay/receipt"]`: what a call cost (spec section 10.1). */
 export interface CallReceipt {
-  intentId: string;
+  /** The payment intent; `null` for a free call, which has no intent and no receipt to fetch. */
+  intentId: string | null;
   charged?: Money & { display?: string };
   held?: Money & { display?: string };
   status?: string;

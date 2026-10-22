@@ -11,6 +11,7 @@ from goassay import (
     ConfigError,
     DelegateAlreadyBoundError,
     DelegateBindConflictError,
+    PaymentNetworkUnknownError,
     ScopeMissingError,
 )
 from goassay._binding import check_binding_challenge
@@ -131,6 +132,21 @@ def test_wait_times_out() -> None:
     with pytest.raises(AssayError) as err:
         client.paid_calls.wait_until_active(timeout=300)
     assert err.value.code == "WAIT_TIMEOUT"
+
+
+def test_bind_with_no_network_configured_says_so() -> None:
+    fake = Fake(api=delegate_api())
+    with pytest.raises(PaymentNetworkUnknownError) as err:
+        fake.client(pinned=False).paid_calls.bind()
+    msg = str(err.value)
+    assert err.value.guard == "G2"
+    assert "no network is configured for this signer's namespace" in msg and "networks=" in msg
+    assert "the network eip155 " not in msg
+    assert fake.signer.calls == 0
+
+
+def test_scope_missing_status_defaults_to_403_even_when_passed_none() -> None:
+    assert ScopeMissingError("no", required_scope="payments", status=None).status == 403
 
 
 def test_bind_needs_a_signer() -> None:

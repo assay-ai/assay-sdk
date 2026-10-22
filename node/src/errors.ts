@@ -150,11 +150,12 @@ export class PaymentNetworkUnknownError extends PaymentRefusedError {
   override name = "PaymentNetworkUnknownError";
   /** The CAIP-2 network asked for. */
   readonly network: string;
-  constructor(network: string) {
+  constructor(network: string, message?: string) {
     super(
       "G2",
       "G2_NETWORK",
-      `the network ${network} is not in this SDK's network table (production values ship with a later release; pass networks for a non-production environment)`,
+      message ??
+        `the network ${network} is not in this SDK's network table (production values ship with a later release; pass networks for a non-production environment)`,
     );
     this.network = network;
   }

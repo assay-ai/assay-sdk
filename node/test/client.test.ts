@@ -45,6 +45,16 @@ function paidTool(
 }
 
 describe("free call", () => {
+  it("a free call's receipt has a null intentId (no intent, no receipt to fetch)", async () => {
+    const { client } = fakeClient({
+      mcp: () =>
+        toolResult({ "assay/receipt": { ...RECEIPT, intentId: null, charged: { ...RECEIPT.charged, amount: "0" } } }),
+    });
+    const r = await client.tools.call("get_weather", {});
+    const intentId: string | null = r.receipt?.intentId ?? null;
+    expect(intentId).toBeNull();
+  });
+
   it("sends the tool, an idempotency key and the protocol headers; returns the receipt", async () => {
     const { client, seen } = fakeClient({
       signer: false,
@@ -194,6 +204,7 @@ describe("paid call", () => {
     expect(err).toBeInstanceOf(ScopeMissingError);
     expect((err as ScopeMissingError).requiredScope).toBe("payments");
     expect((err as ScopeMissingError).retryable).toBe(false);
+    expect((err as ScopeMissingError).status).toBe(403);
     expect((err as ScopeMissingError).message).toMatch(/payments scope/);
     expect(signTypedData).not.toHaveBeenCalled();
     expect(calls()).toHaveLength(1);

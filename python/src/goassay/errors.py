@@ -67,7 +67,8 @@ class AuthError(AssayError):
 
 class ScopeMissingError(AuthError):
     def __init__(self, message: str, *, required_scope: str | None = None, **kw: Any) -> None:
-        kw.setdefault("status", 403)
+        if kw.get("status") is None:
+            kw["status"] = 403
         super().__init__("AUTH_SCOPE_MISSING", message, **kw)
         self.required_scope = required_scope
 
@@ -123,11 +124,12 @@ class PaymentRefusedError(PaymentError):
 
 
 class PaymentNetworkUnknownError(PaymentRefusedError):
-    def __init__(self, network: str) -> None:
+    def __init__(self, network: str, message: str | None = None) -> None:
         super().__init__(
             "G2",
             "G2_NETWORK",
-            f"the network {network} is not in this SDK's network table (production values ship with a later"
+            message
+            or f"the network {network} is not in this SDK's network table (production values ship with a later"
             " release; pass networks= for a non-production environment)",
         )
         self.network = network

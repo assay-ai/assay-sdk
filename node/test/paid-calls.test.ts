@@ -5,6 +5,7 @@ import {
   ConfigError,
   DelegateAlreadyBoundError,
   DelegateBindConflictError,
+  PaymentNetworkUnknownError,
   ScopeMissingError,
 } from "../src/index.js";
 import { checkBindingChallenge } from "../src/core/binding.js";
@@ -210,6 +211,17 @@ describe("paidCalls: replacing a bound key", () => {
     expect(again.pendingDelegate).toBe(KEY.address);
     expect(seen.filter((s) => s.url.endsWith("/agents/me/delegate/challenge"))).toHaveLength(2);
     expect(signTypedData).toHaveBeenCalledTimes(2);
+  });
+
+  it("bind with no network configured says so and names `networks`", async () => {
+    const { client, signTypedData } = fakeClient({ api: delegateApi(), pinned: false });
+    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PaymentNetworkUnknownError);
+    expect((err as PaymentNetworkUnknownError).guard).toBe("G2");
+    expect((err as PaymentNetworkUnknownError).message).toMatch(/no network is configured for this signer's namespace/);
+    expect((err as PaymentNetworkUnknownError).message).toMatch(/`networks`/);
+    expect((err as PaymentNetworkUnknownError).message).not.toMatch(/the network eip155 /);
+    expect(signTypedData).not.toHaveBeenCalled();
   });
 
   it("bind without the payments scope is ScopeMissingError", async () => {

@@ -62,6 +62,13 @@ def paid_tool(after: Any = None) -> Any:
 # --- free call ----------------------------------------------------------------------------
 
 
+def test_free_call_receipt_has_null_intent_id() -> None:
+    receipt = {**RECEIPT, "intentId": None, "charged": {**RECEIPT["charged"], "amount": "0"}}
+    fake = Fake(mcp=lambda p, s: tool_result({"assay/receipt": receipt}))
+    r = fake.client().tools.call("get_weather", {})
+    assert r.receipt is not None and r.receipt["intentId"] is None
+
+
 def test_free_call_sends_key_and_protocol_headers() -> None:
     fake = Fake(mcp=lambda p, s: tool_result({"assay/receipt": RECEIPT}, structuredContent={"t": 21}))
     r = fake.client(with_signer=False).tools.call(TOOL, {"city": "Lisbon"})
@@ -170,6 +177,7 @@ def test_free_only_key_on_paid_tool_is_scope_missing_nothing_signed() -> None:
     with pytest.raises(ScopeMissingError) as err:
         fake.client().tools.call(TOOL, {})
     assert err.value.required_scope == "payments" and err.value.retryable is False
+    assert err.value.status == 403
     assert "payments scope" in str(err.value)
     assert fake.signer.calls == 0 and len(fake.calls()) == 1 and fake.sleeps == []
 

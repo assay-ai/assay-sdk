@@ -152,7 +152,13 @@ def bind(c: Context, network: str | None) -> Flow[PaidCallsStatus]:
     if chain_id is None:
         if nid is None and len(evm) > 1:
             raise ConfigError("bind() needs `network` naming one of the eip155 networks")
-        raise PaymentNetworkUnknownError(nid or "eip155")
+        if nid is None:
+            raise PaymentNetworkUnknownError(
+                "eip155",
+                "no network is configured for this signer's namespace (eip155); pass networks= to Assay(...)"
+                " with an entry for your chain (production values ship with a later release)",
+            )
+        raise PaymentNetworkUnknownError(nid)
     answer = yield from bind_evm_key(
         signer=signer, chain_id=chain_id, credential_id=current.credential_id, rest=c.rest, now=c.now
     )

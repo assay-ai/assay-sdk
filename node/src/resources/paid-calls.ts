@@ -168,7 +168,12 @@ export class PaidCalls {
     if (chainId === null) {
       if (network === undefined && evm.length > 1)
         throw new ConfigError("bind() needs `network` naming one of the eip155 networks");
-      throw new PaymentNetworkUnknownError(network ?? "eip155");
+      if (network === undefined)
+        throw new PaymentNetworkUnknownError(
+          "eip155",
+          "no network is configured for this signer's namespace (eip155); pass `networks` to the Assay constructor with an entry for your chain (production values ship with a later release)",
+        );
+      throw new PaymentNetworkUnknownError(network);
     }
     const answer = await bindEvmKey({
       signer,

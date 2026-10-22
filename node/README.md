@@ -49,6 +49,22 @@ const assay = new Assay({
 const res = await assay.tools.call("weather_forecast", { city: "Lisbon" });
 ```
 
+`evmSigner()` returns a frozen object. To wrap signing (for logging or counting), build a new signer object around it instead of changing it in place:
+
+```ts
+import type { TypedData } from "@goassay-ai/sdk";
+
+const base = evmSigner(account);
+const signer = {
+  namespace: base.namespace,
+  address: base.address,
+  signTypedData: async (typedData: TypedData) => {
+    console.log("signing", typedData.primaryType);
+    return base.signTypedData(typedData);
+  },
+};
+```
+
 On a paid tool the server answers `PAYMENT_REQUIRED`. The SDK then checks the requirement with its local guards (G1 to G12, including the chain reads of your key's grant), calls `onPayment`, signs one voucher, and sends the same call again with the same idempotency key. Network retries resend the same request; a voucher is never signed twice for one logical call, even when you start the same call twice at once.
 
 ### Retrying safely
@@ -132,9 +148,14 @@ The approval link is built on the web app's origin (`webUrl`, default `https://p
 
 ## Reading a receipt
 
+Only a paid call has a receipt to fetch. A free call's `res.receipt.intentId` is `null`: it has no intent, and `res.receipt` already says it cost nothing.
+
 ```ts
-const receipt = await assay.receipts.get(res.receipt!.intentId);
-receipt.chargedPrice; // { amount: "100000", asset: "eip155:...", decimals: 6 }
+const intentId = res.receipt?.intentId;
+if (intentId) {
+  const receipt = await assay.receipts.get(intentId);
+  receipt.chargedPrice; // { amount: "100000", asset: "eip155:...", decimals: 6 }
+}
 ```
 
 ## Handling errors

@@ -50,7 +50,19 @@ res = assay.tools.call("weather_forecast", {"city": "Lisbon"})
 
 On a paid tool the server answers `PAYMENT_REQUIRED`. The SDK then checks the requirement with its local guards (G1 to G12, including the chain reads of your key's grant), calls `on_payment`, signs one voucher, and sends the same call again with the same idempotency key. Network retries resend the same request; a voucher is never signed twice for one logical call, even when two threads or tasks start the same call at once.
 
-A signer is any object with `namespace = "eip155"`, `address` and `sign_typed_data(typed_data)`, so a KMS or HSM key works the same way. With `AsyncAssay`, `sign_typed_data` and `on_payment` may be async.
+A signer is any object with `namespace = "eip155"`, `address` and `sign_typed_data(typed_data)`, so a KMS or HSM key works the same way. With `AsyncAssay`, `sign_typed_data` and `on_payment` may be async. The object `evm_signer()` returns cannot be changed in place; to wrap signing (for logging or counting), build a new signer object that calls it:
+
+```python
+class LoggingSigner:
+    namespace = "eip155"
+
+    def __init__(self, base):
+        self.base, self.address = base, base.address
+
+    def sign_typed_data(self, typed_data):
+        print("signing", typed_data["primaryType"])
+        return self.base.sign_typed_data(typed_data)
+```
 
 ### Retrying safely
 
@@ -130,9 +142,13 @@ The approval link is built on the web app's origin (`web_url`, default `https://
 
 ## Reading a receipt
 
+Only a paid call has a receipt to fetch. A free call's `res.receipt["intentId"]` is `None`: it has no intent, and `res.receipt` already says it cost nothing.
+
 ```python
-receipt = assay.receipts.get(res.receipt["intentId"])
-receipt["chargedPrice"]  # {"amount": "100000", "asset": "eip155:...", "decimals": 6}
+intent_id = res.receipt.get("intentId") if res.receipt else None
+if intent_id:
+    receipt = assay.receipts.get(intent_id)
+    receipt["chargedPrice"]  # {"amount": "100000", "asset": "eip155:...", "decimals": 6}
 ```
 
 ## Handling errors

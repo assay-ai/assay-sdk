@@ -57,7 +57,8 @@ class ToolResult:
     is_error: bool
     """The provider's own tool error. Assay refusals are raised, never returned."""
     receipt: dict[str, Any] | None
-    """``_meta["assay/receipt"]``: what the call cost (``intentId``, ``charged``, ``status`` ...)."""
+    """``_meta["assay/receipt"]``: what the call cost (``intentId``, ``charged``, ``status`` ...).
+    ``intentId`` is ``None`` for a free call: it has no intent and no receipt to fetch."""
     replayed: bool
     """The stored result of an earlier attempt with the same idempotency key; not charged again."""
     idempotency_key: str
