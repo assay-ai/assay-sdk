@@ -83,6 +83,15 @@ class ToolList:
     names this URL does not serve)."""
 
 
+def _hint_of(value: object) -> str | None:
+    """The server's `hint` on `assay/error`, trimmed, when it is a short single-line text."""
+    if not isinstance(value, str):
+        return None
+    hint = value.strip()
+    ok = 0 < len(hint) <= 500 and not any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in hint)
+    return hint if ok else None
+
+
 def _assay_error(result: dict[str, Any]) -> dict[str, Any] | None:
     meta = result.get("_meta")
     e = meta.get(ERROR_META) if isinstance(meta, dict) else None
@@ -250,7 +259,12 @@ def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> 
 
     fix_url = refusal["fixUrl"] if isinstance(refusal.get("fixUrl"), str) else None
     if not c.signers:
-        raise PaymentRequiredError(f"{name} is a paid tool and this client has no signer", requirement, fix_url=fix_url)
+        raise PaymentRequiredError(
+            f"{name} is a paid tool and this client has no signer",
+            requirement,
+            fix_url=fix_url,
+            hint=_hint_of(refusal.get("hint")),
+        )
     network = requirement.get("network") if isinstance(requirement, dict) else None
     network = network if isinstance(network, str) else "unknown"
     ns = namespace_of(network)

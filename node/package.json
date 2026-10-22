@@ -22,10 +22,12 @@
     "./core": {
       "types": "./dist/core/index.d.ts",
       "default": "./dist/core/index.js"
-    }
+    },
+    "./vectors/*": "./vectors/*"
   },
   "files": [
     "dist",
+    "vectors",
     "README.md",
     "LICENSE"
   ],
@@ -39,6 +41,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "node -e \"const fs = require('node:fs'); fs.rmSync('vectors', { recursive: true, force: true }); fs.cpSync('../vectors', 'vectors', { recursive: true })\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",

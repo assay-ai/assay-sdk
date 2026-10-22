@@ -233,6 +233,29 @@ describe("paid call", () => {
     expect((err as PaymentRequiredError).fixUrl).toContain("enable-paid");
   });
 
+  it("PaymentRequiredError keeps the server's hint, and only that server text", async () => {
+    const hint = " Add funds to open it, then call again: https://app.example.test/funding";
+    const answer = (h: unknown) => () => {
+      const r = paymentRequired(BASE.requirement);
+      Object.assign(r._meta["assay/error"] as object, { hint: h, message: "SECRET server text" });
+      r.content = [{ type: "text", text: "SECRET server text" }];
+      return r;
+    };
+    const err = (await fakeClient({ signer: false, mcp: answer(hint) })
+      .client.tools.call(TOOL, {})
+      .catch((e: unknown) => e)) as PaymentRequiredError;
+    expect(err).toBeInstanceOf(PaymentRequiredError);
+    expect(err.hint).toBe(hint.trim());
+    expect(err.message.endsWith(hint.trim())).toBe(true);
+    expect(err.message).not.toContain("SECRET");
+    for (const bad of [7, "", "a\nb", "x".repeat(501)]) {
+      const e = (await fakeClient({ signer: false, mcp: answer(bad) })
+        .client.tools.call(TOOL, {})
+        .catch((x: unknown) => x)) as PaymentRequiredError;
+      expect(e.hint).toBeNull();
+    }
+  });
+
   it("a requirement for a network no signer serves is PaymentSchemeUnsupportedError naming it", async () => {
     const network = "solana:placeholder";
     const { client, signTypedData } = fakeClient({ mcp: () => paymentRequired({ ...BASE.requirement, network }) });

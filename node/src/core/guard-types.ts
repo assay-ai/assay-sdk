@@ -58,7 +58,7 @@ export const REFUSAL_CODES = {
   G10_REQUEST_HASH: "G10",
   G10_RESOURCE: "G10",
   G10_MAX_TIMEOUT: "G10",
-  /** App-only (a per-URL paid list, as in assay-mcp); the SDK never raises it. */
+  /** Only with `GuardOptions.paidUrlPolicy` (a per-URL paid list, as in assay-mcp). */
   G11_URL_NOT_PAID: "G11",
   G12_DEBT_OR_SEQ_ENDPOINT: "G12",
   G12_NOT_A_TOOL_CALL: "G12",
@@ -180,6 +180,26 @@ export interface GuardContext {
    * window. (The `Date` correction applies only to the voucher's `issuedAt`.)
    */
   nowSeconds: number;
+}
+
+/**
+ * Options for tools built on the protocol (such as `assay-mcp`). With none given, the guards run
+ * exactly as the `Assay` client runs them.
+ */
+export interface GuardOptions {
+  /**
+   * G11: a per-URL paid list. When given, a payment through `canonicalUrl` is refused with
+   * `G11_URL_NOT_PAID` unless `paidUrls` lists it. Runs after G10 and before G12.
+   */
+  paidUrlPolicy?: { canonicalUrl: string; paidUrls: readonly string[] };
+  /** The G4 `G4_PAYER_CHANGED` reason, for a tool that tells its user another command to run. */
+  payerChangedReason?: string;
+  /**
+   * `guardAndBuild` only: what a signer refusal after the guards passed becomes. `"refuse"` (the
+   * default) returns it as a G1 refusal; `"throw"` rethrows the `SignerRefusal`, and an `issuedAt`
+   * that is not a positive integer throws one too.
+   */
+  signerRefusal?: "refuse" | "throw";
 }
 
 export type GuardResult = { ok: true } | { ok: false; guard: GuardId; code: RefusalCode; reason: string };

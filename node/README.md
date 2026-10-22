@@ -119,7 +119,7 @@ For work you may redo after a restart, pass your own key (for example `order-${o
 With a signer, every voucher is checked against local limits before it is signed:
 
 - **Defaults: $0.50 per call and $5 per rolling 24 hours**, per signing key.
-- Change them with `limits: { maxPerCall, maxPerDay }` (dollars, as strings).
+- Change them with `limits: { maxPerCall, maxPerDay }` (dollars, as strings). The keys are camelCase in Node; the Python SDK spells them `max_per_call` and `max_per_day`.
 - The record is in memory, per process: a restart starts again at zero, and worker threads or several processes each have their own. The on-chain caps that the payer set when approving the key bound it across processes.
 
 `onPayment(details)` sees each payment (tool, network, amount, provider, payer, idempotency key) after every check passed and before it is signed. Use it for your own rules, for example an allow-list of providers:
@@ -235,7 +235,9 @@ try {
 | `logger`             | silent; never logs keys, headers, bodies or signatures                                           |
 | `now`, `sleep`       | the system clock (corrected by the server's `Date` for vouchers), `setTimeout`                   |
 
-The protocol core (EIP-712 voucher and binding, guards, clock) is at `@goassay-ai/sdk/core`.
+The protocol core (EIP-712 voucher and binding, guards, clock, network tables, `_meta` helpers and server error codes) is at `@goassay-ai/sdk/core`, for tools built on the protocol itself such as `assay-mcp`. The shared test vectors ship in the package: `@goassay-ai/sdk/vectors/eip155/vouchers.json` and the other files of [`vectors/`](https://github.com/assay-ai/assay-sdk/tree/main/vectors).
+
+A `PaymentRequiredError` carries the server's `hint` (what to do next, for example open an escrow) when the server sent one; it is also at the end of the message.
 
 ## Development
 

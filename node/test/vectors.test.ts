@@ -19,6 +19,7 @@ import {
   SignerRefusal,
   type Eip155NetworkEntry,
   type GuardContext,
+  type GuardOptions,
   type NetworkEntry,
   type VoucherRequirement,
 } from "../src/core/index.js";
@@ -183,30 +184,31 @@ function table(ctx: GuardContext): Map<string, Eip155NetworkEntry> {
 }
 
 /** Through the scheme's guard step (`guardAndBuild`), as a paid call runs it. */
-function viaScheme(ctx: GuardContext) {
+function viaScheme(ctx: GuardContext, opts: GuardOptions = {}) {
   const { network: _n, ...rest } = ctx;
   void _n;
-  const r = guardAndBuild(rest, ctx.nowSeconds, table(ctx));
+  const r = guardAndBuild(rest, ctx.nowSeconds, table(ctx), opts);
   return r.ok ? { ok: true } : { ok: false, guard: r.guard, code: r.code, reason: r.reason };
 }
 
-/**
- * G11 (a per-URL paid list) is app-only (vectors/README.md): the SDK has no such list, so paid
- * calls go through whatever URL the client was built for, and its cases are not run here.
- */
-const APP_ONLY_GUARDS = new Set(["G11"]);
+/** G11 runs with a per-URL paid list: the `canonicalUrl` and `paidUrls` of the vector's context. */
+function policyOf(ctx: GuardContext): GuardOptions {
+  const { canonicalUrl, paidUrls } = ctx as unknown as { canonicalUrl: string; paidUrls: string[] };
+  return { paidUrlPolicy: { canonicalUrl, paidUrls } };
+}
 
 describe("guards.json", () => {
-  it("has the app-only G11 cases the SDK skips", () => {
-    expect(guards.cases.filter((c: { guard: string }) => APP_ONLY_GUARDS.has(c.guard)).length).toBeGreaterThan(0);
+  it("has G11 cases, run only with a paid-URL policy", () => {
+    expect(guards.cases.filter((c: { guard: string }) => c.guard === "G11").length).toBeGreaterThan(0);
   });
 
   for (const c of guards.cases) {
-    const appOnly = APP_ONLY_GUARDS.has(c.guard);
-    const title = `${c.guard} ${c.name}${appOnly ? " (app-only: the SDK has no per-URL paid list)" : ""}`;
-    it.skipIf(appOnly)(title, () => {
+    it(`${c.guard} ${c.name}`, () => {
       const ctx = apply(base, c.changes);
-      for (const result of [checkAll(ctx), viaScheme(ctx)]) {
+      const results = [checkAll(ctx, policyOf(ctx)), viaScheme(ctx, policyOf(ctx))];
+      // Without a policy (the Assay client), every other case gives the same answer.
+      if (c.guard !== "G11") results.push(checkAll(ctx), viaScheme(ctx));
+      for (const result of results) {
         if (c.expect.ok) {
           expect(result).toEqual({ ok: true });
           continue;

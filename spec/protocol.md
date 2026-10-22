@@ -334,7 +334,7 @@ Before it signs, a client checks the requirement locally. The reference implemen
 | G8 | The provider is in the local allow-list, when one is set |
 | G9 | `1 <= seq < 2^53`, as a canonical decimal string |
 | G10 | `requestHash` is `sha256:<64 hex>`; `resource` is 1 to 2,048 Unicode code points; `maxTimeoutSeconds` is 1 to 300 |
-| G11 | App-only: paid calls are switched on for the MCP URL in use, in an app that keeps a per-URL paid list (the local `assay-mcp` app). The SDKs have no such list and skip G11 |
+| G11 | Only in an app that keeps a per-URL paid list (the local `assay-mcp` app): paid calls are switched on for the MCP URL in use. The `Assay` clients have no such list and skip G11; `@goassay-ai/sdk/core` runs it when given `paidUrlPolicy` |
 | G12 | `resource` is exactly `/mcp/tools/<the tool called>`, and is not a debt or sequence endpoint |
 
 The minimum for an Assay-compatible client is G2, G5, G7 and G12. All the others are strongly recommended, G11 only for a client that keeps a per-URL paid list.

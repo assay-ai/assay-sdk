@@ -116,7 +116,7 @@ For work you may redo after a restart, pass your own key (for example `f"order-{
 With a signer, every voucher is checked against local limits before it is signed:
 
 - **Defaults: $0.50 per call and $5 per rolling 24 hours**, per signing key.
-- Change them with `limits={"max_per_call": ..., "max_per_day": ...}` (dollars, as strings).
+- Change them with `limits={"max_per_call": ..., "max_per_day": ...}` (dollars, as strings). The keys are snake_case in Python; the Node SDK spells them `maxPerCall` and `maxPerDay`.
 - The record is in memory, per process, and safe across threads: a restart starts again at zero, and several processes each have their own. The on-chain caps that the payer set when approving the key bound it across processes.
 
 `on_payment(details)` sees each payment (tool, network, amount, provider, payer, idempotency key) after every check passed and before it is signed. Use it for your own rules, for example an allow-list of providers:
@@ -207,6 +207,8 @@ except errors.RateLimitError as e:
 except errors.AssayError as e:
     print(e.code, e.message)
 ```
+
+A `PaymentRequiredError` carries the server's `hint` (what to do next, for example open an escrow) when the server sent one; it is also at the end of the message.
 
 ## Options
 
