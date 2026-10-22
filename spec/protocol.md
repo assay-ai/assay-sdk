@@ -228,7 +228,7 @@ The client MUST take the chain id, escrow and asset from its own network table, 
 
 The network table is held by the client:
 
-- the reference SDKs ship a built-in table pinned in each release (production values are published with a later release; until then it is empty and every paid call is refused);
+- the reference SDKs ship a built-in table pinned in each release (today: Robinhood Chain testnet, `eip155:46630`);
 - the caller can configure further networks in code, for a test chain or another deployment. A configured entry for a network the built-in table has replaces that entry whole, so escrow and asset never come from two deployments;
 - the caller can replace only a network's RPC URLs.
 

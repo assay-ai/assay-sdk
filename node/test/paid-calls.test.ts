@@ -11,6 +11,9 @@ import {
 import { checkBindingChallenge } from "../src/core/binding.js";
 import { BINDING, fakeClient, KEY, NOW_MS, WEB, type Seen } from "./fake.js";
 
+/** The test chain; the built-in table adds a second eip155 network, so bind() names it. */
+const NET = BINDING.context.network;
+
 const ctx = BINDING.context;
 const CREDENTIAL = ctx.credentialId as string;
 const CAIP10 = `${ctx.network}:${KEY.address}`;
@@ -121,7 +124,7 @@ describe("paidCalls: replacing a bound key", () => {
 
   it("bind -> PENDING_APPROVAL with the old key still bound -> waitUntilActive once promoted", async () => {
     const { client, signTypedData } = fakeClient({ api: rebindApi() });
-    const setup = await client.paidCalls.bind();
+    const setup = await client.paidCalls.bind({ network: NET });
     expect(setup.alreadyBound).toBe(false);
     expect(setup.bindStatus).toBe("PENDING_APPROVAL");
     expect(setup.state).toBe("pending_approval");
@@ -140,8 +143,8 @@ describe("paidCalls: replacing a bound key", () => {
 
   it("bind again while pending is a no-op: nothing is signed", async () => {
     const { client, signTypedData } = fakeClient({ api: rebindApi(1_000) });
-    await client.paidCalls.bind();
-    const again = await client.paidCalls.bind();
+    await client.paidCalls.bind({ network: NET });
+    const again = await client.paidCalls.bind({ network: NET });
     expect(again.alreadyBound).toBe(true);
     expect(again.bindStatus).toBe("PENDING_APPROVAL");
     expect(signTypedData).toHaveBeenCalledTimes(1);
@@ -154,7 +157,7 @@ describe("paidCalls: replacing a bound key", () => {
       },
     }));
     const { client } = fakeClient({ api });
-    await expect(client.paidCalls.bind()).rejects.toMatchObject({ code: "BINDING_NOT_ACCEPTED" });
+    await expect(client.paidCalls.bind({ network: NET })).rejects.toMatchObject({ code: "BINDING_NOT_ACCEPTED" });
   });
 
   it("ACTIVE naming only the old key is not accepted", async () => {
@@ -162,7 +165,7 @@ describe("paidCalls: replacing a bound key", () => {
       body: { data: { credentialId: CREDENTIAL, status: "ACTIVE", delegate: OTHER10, pendingDelegate: CAIP10 } },
     }));
     const { client } = fakeClient({ api });
-    await expect(client.paidCalls.bind()).rejects.toMatchObject({ code: "BINDING_NOT_ACCEPTED" });
+    await expect(client.paidCalls.bind({ network: NET })).rejects.toMatchObject({ code: "BINDING_NOT_ACCEPTED" });
   });
 
   it("409 ACCOUNT_DELEGATE_ALREADY_BOUND is DelegateAlreadyBoundError", async () => {
@@ -174,7 +177,7 @@ describe("paidCalls: replacing a bound key", () => {
       },
     }));
     const { client } = fakeClient({ api });
-    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    const err = await client.paidCalls.bind({ network: NET }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DelegateAlreadyBoundError);
     expect((err as DelegateAlreadyBoundError).code).toBe("ACCOUNT_DELEGATE_ALREADY_BOUND");
     expect((err as DelegateAlreadyBoundError).status).toBe(409);
@@ -196,7 +199,7 @@ describe("paidCalls: replacing a bound key", () => {
       return parks(req);
     };
     const { client, seen, signTypedData } = fakeClient({ api });
-    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    const err = await client.paidCalls.bind({ network: NET }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DelegateBindConflictError);
     expect((err as DelegateBindConflictError).code).toBe("ACCOUNT_DELEGATE_BIND_CONFLICT");
     expect((err as DelegateBindConflictError).status).toBe(409);
@@ -205,7 +208,7 @@ describe("paidCalls: replacing a bound key", () => {
     expect(seen.filter((s) => s.method === "POST" && s.url.endsWith("/agents/me/delegate"))).toHaveLength(1);
     expect(signTypedData).toHaveBeenCalledTimes(1);
 
-    const again = await client.paidCalls.bind();
+    const again = await client.paidCalls.bind({ network: NET });
     expect(again.alreadyBound).toBe(false);
     expect(again.bindStatus).toBe("PENDING_APPROVAL");
     expect(again.pendingDelegate).toBe(KEY.address);
@@ -213,14 +216,13 @@ describe("paidCalls: replacing a bound key", () => {
     expect(signTypedData).toHaveBeenCalledTimes(2);
   });
 
-  it("bind with no network configured says so and names `networks`", async () => {
+  it("bind on a network that is not in the table names it and `networks`", async () => {
     const { client, signTypedData } = fakeClient({ api: delegateApi(), pinned: false });
-    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    const err = await client.paidCalls.bind({ network: NET }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PaymentNetworkUnknownError);
     expect((err as PaymentNetworkUnknownError).guard).toBe("G2");
-    expect((err as PaymentNetworkUnknownError).message).toMatch(/no network is configured for this signer's namespace/);
-    expect((err as PaymentNetworkUnknownError).message).toMatch(/`networks`/);
-    expect((err as PaymentNetworkUnknownError).message).not.toMatch(/the network eip155 /);
+    expect((err as PaymentNetworkUnknownError).network).toBe(NET);
+    expect((err as PaymentNetworkUnknownError).message).toMatch(/networks/);
     expect(signTypedData).not.toHaveBeenCalled();
   });
 
@@ -241,7 +243,7 @@ describe("paidCalls: replacing a bound key", () => {
           }
         : rebindApi()(req);
     const { client } = fakeClient({ api });
-    const err = await client.paidCalls.bind().catch((e: unknown) => e);
+    const err = await client.paidCalls.bind({ network: NET }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ScopeMissingError);
     expect((err as ScopeMissingError).requiredScope).toBe("payments");
   });
@@ -259,7 +261,7 @@ describe("paidCalls", () => {
 
   it("bind -> approval link and fingerprint -> waitUntilActive", async () => {
     const { client, seen, signTypedData, sleep } = fakeClient({ api: delegateApi() });
-    const setup = await client.paidCalls.bind();
+    const setup = await client.paidCalls.bind({ network: NET });
     expect(setup.alreadyBound).toBe(false);
     expect(setup.bindStatus).toBe("ACTIVE");
     expect(setup.state).toBe("pending_approval");
@@ -288,8 +290,8 @@ describe("paidCalls", () => {
   it("bind is a no-op when the key is already bound: nothing is signed", async () => {
     const api = delegateApi(0);
     const { client, signTypedData } = fakeClient({ api });
-    await client.paidCalls.bind();
-    const again = await client.paidCalls.bind();
+    await client.paidCalls.bind({ network: NET });
+    const again = await client.paidCalls.bind({ network: NET });
     expect(again.alreadyBound).toBe(true);
     expect(signTypedData).toHaveBeenCalledTimes(1);
   });
@@ -298,7 +300,7 @@ describe("paidCalls", () => {
 
   it("approvalUrl is built from webUrl when the server sends none", async () => {
     const { client } = fakeClient({ api: delegateApi(2, null) });
-    expect((await client.paidCalls.bind()).approvalUrl).toBe(built);
+    expect((await client.paidCalls.bind({ network: NET })).approvalUrl).toBe(built);
   });
 
   it("a server link for another credential is not used", async () => {
@@ -316,7 +318,7 @@ describe("paidCalls", () => {
     let t = NOW_MS;
     let ticking = false;
     const { client } = fakeClient({ api: delegateApi(1_000), options: { now: () => (ticking ? (t += 60_000) : t) } });
-    await client.paidCalls.bind();
+    await client.paidCalls.bind({ network: NET });
     ticking = true;
     await expect(client.paidCalls.waitUntilActive({ timeoutMs: 300_000 })).rejects.toMatchObject({
       code: "WAIT_TIMEOUT",
@@ -332,6 +334,6 @@ describe("paidCalls", () => {
 
   it("bind needs a signer", async () => {
     const { client } = fakeClient({ signer: false, api: delegateApi() });
-    await expect(client.paidCalls.bind()).rejects.toBeInstanceOf(ConfigError);
+    await expect(client.paidCalls.bind({ network: NET })).rejects.toBeInstanceOf(ConfigError);
   });
 });

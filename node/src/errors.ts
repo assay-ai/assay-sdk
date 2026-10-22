@@ -170,7 +170,7 @@ export class PaymentNetworkUnknownError extends PaymentRefusedError {
       "G2",
       "G2_NETWORK",
       message ??
-        `the network ${network} is not in this SDK's network table (production values ship with a later release; pass networks for a non-production environment)`,
+        `the network ${network} is not in this SDK's network table (pass networks for another environment or chain)`,
     );
     this.network = network;
   }

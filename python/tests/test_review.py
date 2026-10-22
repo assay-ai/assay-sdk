@@ -227,8 +227,13 @@ def test_i5_default_web_url_is_the_portal() -> None:
 # --- networks: pinned in the SDK ----------------------------------------------------------
 
 
-def test_built_in_table_is_empty_until_released() -> None:
-    assert dict(BUILT_IN_NETWORKS) == {}
+def test_built_in_table_pins_robinhood_testnet() -> None:
+    assert list(BUILT_IN_NETWORKS) == ["eip155:46630"]
+    n = BUILT_IN_NETWORKS["eip155:46630"]
+    assert n["escrow"] == "eip155:46630:0x2723AD1fEC053Fe05305e4D0c874B0402959Ce18"
+    assert n["asset"] == "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3"
+    assert n["decimals"] == 6
+    assert len({u.split("/")[2] for u in n["rpcUrls"]}) == 2
 
 
 def test_unknown_network_is_refused_without_signing_or_reading() -> None:
@@ -246,7 +251,7 @@ def test_bind_with_no_network_in_the_table() -> None:
     data = {"credentialId": credential, "delegate": None, "pendingDelegate": None, "paidCalls": None}
     fake = Fake(api=lambda s: Answer({"data": data}))
     with pytest.raises(PaymentNetworkUnknownError):
-        fake.client(pinned=False).paid_calls.bind()
+        fake.client(pinned=False).paid_calls.bind(network=BINDING["context"]["network"])
     assert fake.signer.calls == 0
 
 

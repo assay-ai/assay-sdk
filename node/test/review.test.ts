@@ -167,8 +167,14 @@ describe("I5 approval link from webUrl", () => {
 });
 
 describe("networks: pinned in the SDK, never read from the server", () => {
-  it("the built-in table is empty until production values are released", () => {
-    expect(Object.keys(BUILT_IN_NETWORKS)).toEqual([]);
+  it("the built-in table pins Robinhood Chain testnet, read through two RPC operators", () => {
+    expect(Object.keys(BUILT_IN_NETWORKS)).toEqual(["eip155:46630"]);
+    const n = BUILT_IN_NETWORKS["eip155:46630"]!;
+    expect(n.escrow).toBe("eip155:46630:0x2723AD1fEC053Fe05305e4D0c874B0402959Ce18");
+    expect(n.asset).toBe("eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3");
+    expect(n.decimals).toBe(6);
+    expect(new Set(n.rpcUrls.map((u) => new URL(u).host)).size).toBe(2);
+    expect(Object.isFrozen(n)).toBe(true);
   });
 
   it("a paid call on a network not in the table is PaymentNetworkUnknownError; nothing is signed or read", async () => {
@@ -191,7 +197,7 @@ describe("networks: pinned in the SDK, never read from the server", () => {
         body: { data: { credentialId: ctx.credentialId, delegate: null, pendingDelegate: null, paidCalls: null } },
       }),
     });
-    await expect(client.paidCalls.bind()).rejects.toBeInstanceOf(PaymentNetworkUnknownError);
+    await expect(client.paidCalls.bind({ network: ctx.network })).rejects.toBeInstanceOf(PaymentNetworkUnknownError);
     expect(signTypedData).not.toHaveBeenCalled();
   });
 
@@ -336,7 +342,7 @@ describe("minor findings", () => {
         return { body: { data: BINDING.valid[0].challenge } };
       },
     });
-    await expect(client.paidCalls.bind()).rejects.toMatchObject({ code: "SIGNER_FAILED" });
+    await expect(client.paidCalls.bind({ network: ctx.network })).rejects.toMatchObject({ code: "SIGNER_FAILED" });
     expect(seen.filter((s) => s.method === "POST")).toHaveLength(1);
   });
 

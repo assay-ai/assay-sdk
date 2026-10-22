@@ -144,8 +144,8 @@ class PaymentNetworkUnknownError(PaymentRefusedError):
             "G2",
             "G2_NETWORK",
             message
-            or f"the network {network} is not in this SDK's network table (production values ship with a later"
-            " release; pass networks= for a non-production environment)",
+            or f"the network {network} is not in this SDK's network table (pass networks= for another"
+            " environment or chain)",
         )
         self.network = network
 
