@@ -29,6 +29,36 @@ with Assay() as assay:  # ASSAY_API_KEY
     res.receipt  # what the call cost
 ```
 
+## Choose a URL
+
+A client calls tools through one MCP URL. `mcp_url` takes a full URL or a path on `https://mcp.goassay.ai`; the path is checked against the shapes Assay serves when the client is built, so a typo is a `ConfigError` at once. `assay.at(url_or_path)` (also on `AsyncAssay`) returns a client for another URL that shares this one's API key, signers, spend limits and ledger, `on_payment`, HTTP client and logger, and keeps its own quote cache. Close the client it came from; closing a sibling does nothing.
+
+```python
+from goassay import Assay
+
+everything = Assay()  # "/": the whole catalogue, found with tools.search
+research = Assay(mcp_url="/my/research")  # your tool set (Draft; "/my/research@2" for version 2)
+weather = Assay(mcp_url="/?tools=get_weather")  # a single tool
+
+# Two URLs in one program: one key, one set of limits.
+kit = everything.at("/@acme/twitter-kit@3")  # a public tool set, version 3
+listed = kit.tools.list()  # tools/list: the set's tools, with prices
+kit.tools.call("acme__get_profile", {"user": "x"})  # a provider tool: {handle}__{tool}, sent unchanged
+everything.tools.call("get_weather", {"city": "Lisbon"})
+```
+
+| Path | Serves |
+|---|---|
+| `/` | Everything (default) |
+| `/my/{slug}`, `/my/{slug}@{n}` | your tool set: the Draft, or version `n` |
+| `/@{handle}/{slug}`, `/@{handle}/{slug}@{n}` | a public tool set |
+| `/u/{token}`, `/u/{token}@{n}` | a link-only tool set; the token is a secret, shown as `/u/…` in `repr` and logs |
+| `/c/{category}`, `/@{handle}` | one topic, one maker |
+
+Filters on any path: `?tools=a,b` (one name gives a single-tool URL; `name@1` pins a contract major), `?category=x`, `?free=1`, `?discovery=auto|full|search`. A URL the server does not serve to your key raises `McpUrlNotFoundError`.
+
+Paid calls go through whatever URL you choose: the SDK keeps no per-URL paid list. To keep a client free-only, use a key without the `payments` scope, add `?free=1` to its URL, or refuse in `on_payment`. A tool set grant that allows its tools only through its own URL needs that URL; on `/` those tools are `TOOL_NOT_ALLOWED`.
+
 ## Paid call with a local key
 
 The SDK never stores or creates keys. You pass a signer; for a local key, wrap an eth-account account:
@@ -164,6 +194,8 @@ except errors.ScopeMissingError as e:
     print(f"the API key needs the {e.required_scope} scope")
 except errors.HumanSessionRequiredError:
     print("only a signed-in person can do this")
+except errors.McpUrlNotFoundError:
+    print("this MCP URL is not served to this key")
 except errors.PaymentRequiredError:
     print("paid tool: pass a signer")
 except errors.PaymentNetworkUnknownError as e:
@@ -181,7 +213,7 @@ except errors.AssayError as e:
 | Option | Default |
 |---|---|
 | `api_key` | `ASSAY_API_KEY` |
-| `mcp_url`, `api_url`, `web_url` | `https://mcp.goassay.ai/`, `https://api.goassay.ai/api/v1`, `https://portal.goassay.ai` |
+| `mcp_url`, `api_url`, `web_url` | `https://mcp.goassay.ai/` (a URL or a path; see "Choose a URL"), `https://api.goassay.ai/api/v1`, `https://portal.goassay.ai` |
 | `signer` / `signers` | none (free calls only) |
 | `limits` | `{"max_per_call": "0.50", "max_per_day": "5"}` |
 | `rpc_urls` | the table's public RPC URLs |

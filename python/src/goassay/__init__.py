@@ -12,7 +12,7 @@ from goassay._client import (  # noqa: E402
 )
 from goassay._networks import BUILT_IN_NETWORKS  # noqa: E402
 from goassay._paid_calls import PaidCallsStatus  # noqa: E402
-from goassay._tools import SearchResult, ToolResult  # noqa: E402
+from goassay._tools import SearchResult, ToolList, ToolResult  # noqa: E402
 from goassay.errors import (  # noqa: E402
     AssayError,
     AuthError,
@@ -20,6 +20,7 @@ from goassay.errors import (  # noqa: E402
     DelegateAlreadyBoundError,
     DelegateBindConflictError,
     HumanSessionRequiredError,
+    McpUrlNotFoundError,
     NetworkError,
     PaymentError,
     PaymentNetworkUnknownError,
@@ -47,6 +48,7 @@ __all__ = [
     "DelegateBindConflictError",
     "EvmSigner",
     "HumanSessionRequiredError",
+    "McpUrlNotFoundError",
     "NetworkError",
     "PaidCallsStatus",
     "PaymentError",
@@ -60,6 +62,7 @@ __all__ = [
     "ServerError",
     "Signer",
     "TimeoutError",
+    "ToolList",
     "ToolResult",
     "errors",
     "evm_signer",

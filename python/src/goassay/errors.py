@@ -9,6 +9,7 @@ as the nearest class (or ``AssayError`` itself)::
     ├─ AuthError                         401, or an AUTH_* refusal
     │   ├─ ScopeMissingError             403 AUTH_SCOPE_MISSING (.required_scope)
     │   └─ HumanSessionRequiredError     403 AUTH_HUMAN_SESSION_REQUIRED: only a signed-in person may do this
+    ├─ McpUrlNotFoundError               404 MCP_URL_NOT_FOUND: the MCP host serves no such URL for this key
     ├─ DelegateAlreadyBoundError         409 ACCOUNT_DELEGATE_ALREADY_BOUND: the key is bound to another API key
     ├─ DelegateBindConflictError         409 ACCOUNT_DELEGATE_BIND_CONFLICT: another key won a first bind; retry once
     ├─ PaymentError                      a PAYMENT_* refusal from the server
@@ -77,6 +78,20 @@ class HumanSessionRequiredError(AuthError):
     def __init__(self, message: str, **kw: Any) -> None:
         kw.setdefault("status", 403)
         super().__init__("AUTH_HUMAN_SESSION_REQUIRED", message, **kw)
+
+
+MCP_URL_NOT_FOUND = "MCP_URL_NOT_FOUND"
+
+
+class McpUrlNotFoundError(AssayError):
+    """The MCP host serves no such URL for this API key (``MCP_URL_NOT_FOUND``, or any 404 from it):
+    the tool set, version, topic or maker does not exist, is not shared with you, or no longer
+    serves. Not retried."""
+
+    def __init__(self, message: str = "the MCP host serves no such URL for this API key", **kw: Any) -> None:
+        if kw.get("status") is None:
+            kw["status"] = 404
+        super().__init__(MCP_URL_NOT_FOUND, message, **kw)
 
 
 class DelegateAlreadyBoundError(AssayError):
@@ -176,6 +191,8 @@ def error_from_server(
     if c == "AUTH_SCOPE_MISSING":
         scope = (details or {}).get("requiredScope")
         return ScopeMissingError(message, required_scope=scope if isinstance(scope, str) else None, **kw)
+    if c == MCP_URL_NOT_FOUND:
+        return McpUrlNotFoundError(message, **kw)
     if c == "AUTH_HUMAN_SESSION_REQUIRED":
         return HumanSessionRequiredError(message, **kw)
     if c == "ACCOUNT_DELEGATE_ALREADY_BOUND":

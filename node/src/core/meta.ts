@@ -33,6 +33,10 @@ export function isIdempotencyKey(value: unknown): value is string {
   return typeof value === "string" && IDEMPOTENCY_KEY.test(value);
 }
 
+/**
+ * A tool name as sent to the server, unchanged: a standard `verb_noun`, or a provider tool's
+ * `{handle}__{tool}` (for example `acme__get_quote`). The server decides what it serves.
+ */
 export function isToolName(value: unknown): value is string {
   return typeof value === "string" && TOOL_NAME.test(value);
 }

@@ -58,6 +58,7 @@ export const REFUSAL_CODES = {
   G10_REQUEST_HASH: "G10",
   G10_RESOURCE: "G10",
   G10_MAX_TIMEOUT: "G10",
+  /** App-only (a per-URL paid list, as in assay-mcp); the SDK never raises it. */
   G11_URL_NOT_PAID: "G11",
   G12_DEBT_OR_SEQ_ENDPOINT: "G12",
   G12_NOT_A_TOOL_CALL: "G12",
@@ -174,10 +175,6 @@ export interface GuardContext {
   signed: SignedVoucher[];
   /** The user's approval of this exact payment, or `null` (G7 `confirmAbove`). */
   confirmation: Confirmation | null;
-  /** The MCP URL in use (G11). */
-  canonicalUrl: string;
-  /** The MCP URLs paid calls may go through (G11). */
-  paidUrls: string[];
   /**
    * Unix seconds from the local clock, never the `Date`-corrected one, for G1, G4 and the G7
    * window. (The `Date` correction applies only to the voucher's `issuedAt`.)

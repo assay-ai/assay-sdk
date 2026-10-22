@@ -14,6 +14,8 @@ export const RUN = "paidCalls.bind() and open";
  * - Pure: every input is in the context; no I/O, no clock, no state.
  * - Fail closed: a missing, malformed or unexpected value is a refusal, never a pass, and the
  *   function never throws.
+ * - G11 (a per-URL paid list) is app-only: the SDK has no such list, so it never runs here and
+ *   paid calls go through whatever MCP URL the client was built for (spec section 9).
  * - The guards run in the order G1..G12 and the first refusal is returned, so every
  *   implementation reports the same guard and code for the same context (`vectors/guards.json`).
  *   The G7 confirmation (`confirmAbove`) runs last of all: the user is asked only about a payment
@@ -21,20 +23,7 @@ export const RUN = "paidCalls.bind() and open";
  * - A reason never carries an address, an amount or a URL from the server.
  */
 
-export const GUARD_ORDER: readonly GuardId[] = [
-  "G1",
-  "G2",
-  "G3",
-  "G4",
-  "G5",
-  "G6",
-  "G7",
-  "G8",
-  "G9",
-  "G10",
-  "G11",
-  "G12",
-];
+export const GUARD_ORDER: readonly GuardId[] = ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G12"];
 
 /**
  * G1: the oldest forwarded call a requirement may answer. A call may take up to the 120 s request
@@ -358,12 +347,6 @@ function g10(c: Checked): Refusal | null {
   return null;
 }
 
-function g11(ctx: GuardContext): Refusal | null {
-  const ok =
-    typeof ctx.canonicalUrl === "string" && Array.isArray(ctx.paidUrls) && ctx.paidUrls.includes(ctx.canonicalUrl);
-  return ok ? null : refuse("G11", "G11_URL_NOT_PAID", "paid calls through this server are off");
-}
-
 function g12(c: Checked): Refusal | null {
   const resource = c.req.resource as string;
   let decoded = resource;
@@ -419,10 +402,10 @@ function run(ctx: GuardContext): GuardResult {
   if (early) return early;
   const caps = g7(ctx, c);
   if ("ok" in caps) return caps;
-  return g8(ctx, c) ?? g9(c) ?? g10(c) ?? g11(ctx) ?? g12(c) ?? confirm(ctx, c, caps.confirmAbove) ?? { ok: true };
+  return g8(ctx, c) ?? g9(c) ?? g10(c) ?? g12(c) ?? confirm(ctx, c, caps.confirmAbove) ?? { ok: true };
 }
 
-/** Runs G1..G12 in order, then the G7 confirmation. `{ok: true}` only when all pass; never throws. */
+/** Runs G1..G12 in order (G11 is app-only), then the G7 confirmation. `{ok: true}` only when all pass; never throws. */
 export function checkAll(ctx: GuardContext): GuardResult {
   try {
     return run(ctx);

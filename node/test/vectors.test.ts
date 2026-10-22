@@ -190,9 +190,21 @@ function viaScheme(ctx: GuardContext) {
   return r.ok ? { ok: true } : { ok: false, guard: r.guard, code: r.code, reason: r.reason };
 }
 
+/**
+ * G11 (a per-URL paid list) is app-only (vectors/README.md): the SDK has no such list, so paid
+ * calls go through whatever URL the client was built for, and its cases are not run here.
+ */
+const APP_ONLY_GUARDS = new Set(["G11"]);
+
 describe("guards.json", () => {
+  it("has the app-only G11 cases the SDK skips", () => {
+    expect(guards.cases.filter((c: { guard: string }) => APP_ONLY_GUARDS.has(c.guard)).length).toBeGreaterThan(0);
+  });
+
   for (const c of guards.cases) {
-    it(`${c.guard} ${c.name}`, () => {
+    const appOnly = APP_ONLY_GUARDS.has(c.guard);
+    const title = `${c.guard} ${c.name}${appOnly ? " (app-only: the SDK has no per-URL paid list)" : ""}`;
+    it.skipIf(appOnly)(title, () => {
       const ctx = apply(base, c.changes);
       for (const result of [checkAll(ctx), viaScheme(ctx)]) {
         if (c.expect.ok) {

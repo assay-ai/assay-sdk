@@ -9,6 +9,7 @@
  * ├─ AuthError                        401, or an AUTH_* refusal
  * │   ├─ ScopeMissingError            403 AUTH_SCOPE_MISSING (.requiredScope)
  * │   └─ HumanSessionRequiredError    403 AUTH_HUMAN_SESSION_REQUIRED: only a signed-in person may do this
+ * ├─ McpUrlNotFoundError              404 MCP_URL_NOT_FOUND: the MCP host serves no such URL for this key
  * ├─ DelegateAlreadyBoundError        409 ACCOUNT_DELEGATE_ALREADY_BOUND: the key is bound to another API key
  * ├─ DelegateBindConflictError        409 ACCOUNT_DELEGATE_BIND_CONFLICT: another key won a first bind; retry once
  * ├─ PaymentError                     a PAYMENT_* refusal from the server
@@ -86,6 +87,20 @@ export class HumanSessionRequiredError extends AuthError {
   override name = "HumanSessionRequiredError";
   constructor(message: string, init: AssayErrorInit = {}) {
     super("AUTH_HUMAN_SESSION_REQUIRED", message, { ...init, status: init.status ?? 403 });
+  }
+}
+
+export const MCP_URL_NOT_FOUND = "MCP_URL_NOT_FOUND";
+
+/**
+ * The MCP host serves no such URL for this API key (`MCP_URL_NOT_FOUND`, or any 404 from it): the
+ * tool set, version, topic or maker does not exist, is not shared with you, or no longer serves.
+ * Not retried.
+ */
+export class McpUrlNotFoundError extends AssayError {
+  override name = "McpUrlNotFoundError";
+  constructor(message = "the MCP host serves no such URL for this API key", init: AssayErrorInit = {}) {
+    super(MCP_URL_NOT_FOUND, message, { ...init, status: init.status ?? 404 });
   }
 }
 
@@ -207,6 +222,7 @@ export function errorFromServer(code: string | undefined, message: string, f: Se
     const scope = f.details?.requiredScope;
     return new ScopeMissingError(message, { ...f, ...(typeof scope === "string" ? { requiredScope: scope } : {}) });
   }
+  if (c === MCP_URL_NOT_FOUND) return new McpUrlNotFoundError(message, f);
   if (c === "AUTH_HUMAN_SESSION_REQUIRED") return new HumanSessionRequiredError(message, f);
   if (c === "ACCOUNT_DELEGATE_ALREADY_BOUND") return new DelegateAlreadyBoundError(message, f);
   if (c === "ACCOUNT_DELEGATE_BIND_CONFLICT") return new DelegateBindConflictError(message, f);

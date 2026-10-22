@@ -20,7 +20,7 @@ A new namespace (for example `solana/`) gets its own folder with the same kinds 
 |---|---|---|
 | `vouchers.json` | section 6 | Rail-B requirements plus `issuedAt` and a `network`, with the expected wire voucher, EIP-712 typed data, domain separator, struct hash, digest and signature |
 | `binding.json` | section 5 | `DelegateBinding` challenges in the server's wire form: valid ones with the typed data to sign, its digest and signature, and invalid ones that must be refused naming a field |
-| `guards.json` | section 9 | The local guards G1 to G12: a passing `base` context and cases that change it |
+| `guards.json` | section 9 | The local guards G1 to G12 (G11 app-only): a passing `base` context and cases that change it |
 | `seq.json` | section 9, G9 | `seq` bounds: `1 <= seq < 2^53` as a canonical decimal string |
 
 ### vouchers.json
@@ -51,6 +51,7 @@ Case notes: `placeholder-escrow` uses a second placeholder escrow `0x1111...` (i
 - `seq.json` sets `requirement.seq` in the `base` of `guards.json`. `ok: false` means refused with `G9` / `G9_SEQ`.
 - Conventions: amounts, caps and spend are atomic units as decimal strings (6 decimals); local limits are dollars as decimal strings; times are Unix seconds on the local clock; `resource` length counts Unicode code points; addresses from the server are checksummed CAIP-10, addresses the client holds itself may be bare `0x` addresses in any case.
 - Codes are stable: never rename or reuse one.
+- **G11 is app-only.** Its cases (`guard: "G11"`, and the `canonicalUrl` / `paidUrls` fields of `base`) are for an app that keeps a per-URL paid list, such as the local `assay-mcp` app. The SDKs in this repository have no such list: they ignore those fields and skip the G11 cases, naming the reason. Their expected values stay here for the apps that run them.
 
 ## Placeholders and provenance
 

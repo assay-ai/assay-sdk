@@ -10,7 +10,7 @@ import { SignerRefusal } from "../../core/errors.js";
 import type { GuardContext, GuardResult, SignedVoucher } from "../../core/guard-types.js";
 import { checkAll, usdToAtomic } from "../../core/guards.js";
 import { getAddress, type Address } from "../../core/hex.js";
-import { isObject, voucherEnvelope, type PriceQuote } from "../../core/meta.js";
+import { isObject, voucherEnvelope } from "../../core/meta.js";
 import { buildVoucher, type VoucherRequirement, type VoucherTypedData, type WireVoucher } from "../../core/voucher.js";
 import { ConfigError } from "../../errors.js";
 import type { EvmSigner } from "../../signer.js";
@@ -194,9 +194,6 @@ export interface Eip155SchemeOptions {
   networks: ReadonlyMap<string, NetworkEntry>;
   limits: Limits;
   chain: ChainReader;
-  /** The quote for a tool (G3): cached from search/get, or a fresh `get_tool`. */
-  quote: (tool: string) => Promise<PriceQuote | null>;
-  mcpUrl: string;
   /** Milliseconds clock. */
   now: () => number;
   /** Server minus local clock, seconds (spec section 7). */
@@ -245,7 +242,7 @@ export class Eip155Scheme implements PaymentScheme {
       };
     }
     const chain = entry && payer ? await this.o.chain.read(entry, payer, localKey) : null;
-    const quote = await this.o.quote(input.tool);
+    const quote = await input.quote(input.tool);
 
     // No await from here to the spend record, so two calls in flight cannot both pass the cap.
     const nowSeconds = Math.floor(this.o.now() / 1000);
@@ -265,8 +262,6 @@ export class Eip155Scheme implements PaymentScheme {
       },
       signed,
       confirmation: null,
-      canonicalUrl: this.o.mcpUrl,
-      paidUrls: [this.o.mcpUrl],
       nowSeconds,
     };
     const built = guardAndBuild(ctx, correctedNow(nowSeconds, this.o.dateOffset()), networks);

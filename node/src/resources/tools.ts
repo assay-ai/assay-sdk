@@ -11,6 +11,7 @@ import {
   isToolName,
   PAYMENT_REQUIRED_CODE,
   PAYMENT_REQUIRED_META,
+  PRICE_META,
   quoteOf,
   RECEIPT_META,
   REPLAYED_META,
@@ -82,6 +83,22 @@ export interface ToolSummary {
 export interface SearchResult {
   results: ToolSummary[];
   nextCursor: string | null;
+}
+
+export interface ListOptions {
+  cursor?: string;
+}
+
+export interface ListResult {
+  /** The tools this URL lists, as MCP describes them (`name`, `description`, `inputSchema`, `_meta` ...). */
+  tools: ToolInfo[];
+  nextCursor: string | null;
+  /**
+   * The list's `_meta`, as sent: `assay/toolsetVersion` (a tool set URL without `@n`),
+   * `assay/sharingEnds`, `assay/renamed` (an old handle) and `assay/ignoredTools` (`?tools=` names
+   * this URL does not serve).
+   */
+  meta: Record<string, unknown>;
 }
 
 export interface ToolInfo {
@@ -159,6 +176,24 @@ export class Tools {
     return { results, nextCursor: typeof out.nextCursor === "string" ? out.nextCursor : null };
   }
 
+  /**
+   * `tools/list`: the tools this URL lists. A tool set, topic, maker or `?tools=` URL lists its
+   * tools; Everything (`/`) lists only a few, plus `search_tools`, `get_tool` and `call_tool`.
+   * Free. Each tool's `_meta["assay/price"]` is kept as its quote for paid calls (G3).
+   */
+  async list(options: ListOptions = {}): Promise<ListResult> {
+    const out = await this.#c.mcp.request("tools/list", options.cursor !== undefined ? { cursor: options.cursor } : {});
+    const tools = Array.isArray(out.tools)
+      ? (out.tools as unknown[]).filter((t): t is ToolInfo => isObject(t) && isToolName(t.name))
+      : [];
+    for (const t of tools) this.#remember(t.name, quoteOf(isObject(t._meta) ? t._meta[PRICE_META] : undefined));
+    return {
+      tools,
+      nextCursor: typeof out.nextCursor === "string" ? out.nextCursor : null,
+      meta: isObject(out._meta) ? { ...out._meta } : {},
+    };
+  }
+
   /** `get_tool`: one tool's description, schemas, price and version. Free. */
   async get(name: string): Promise<ToolInfo> {
     const out = await this.#meta(GET_TOOL, { name });
@@ -223,7 +258,14 @@ export class Tools {
     const tool = name === CALL_TOOL ? args.name : name;
     if (!isToolName(tool))
       throw new PaymentRefusedError("G1", "G1_NOT_FORWARDED", "the paid tool's name is not readable");
-    const input: PrepareInput = { requirement, tool, calledAt, signer, idempotencyKey: key };
+    const input: PrepareInput = {
+      requirement,
+      tool,
+      calledAt,
+      signer,
+      idempotencyKey: key,
+      quote: (t) => this.quoteFor(t),
+    };
     const prepared = await scheme.prepare(input);
     if (!prepared.ok) {
       if (prepared.code === "G2_NETWORK") throw new PaymentNetworkUnknownError(network);

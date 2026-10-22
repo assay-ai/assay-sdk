@@ -28,6 +28,36 @@ res.isError; // true only for the provider's own tool error
 res.receipt; // what the call cost
 ```
 
+## Choose a URL
+
+A client calls tools through one MCP URL. `mcpUrl` takes a full URL or a path on `https://mcp.goassay.ai`; the path is checked against the shapes Assay serves when the client is built, so a typo is a `ConfigError` at once. `assay.at(urlOrPath)` returns a client for another URL that shares this one's API key, signers, spend limits and ledger, `onPayment`, `fetch` and logger, and keeps its own quote cache.
+
+```ts
+import { Assay } from "@goassay-ai/sdk";
+
+const everything = new Assay(); // "/": the whole catalogue, found with tools.search
+const research = new Assay({ mcpUrl: "/my/research" }); // your tool set (Draft; "/my/research@2" for version 2)
+const weather = new Assay({ mcpUrl: "/?tools=get_weather" }); // a single tool
+
+// Two URLs in one program: one key, one set of limits.
+const kit = everything.at("/@acme/twitter-kit@3"); // a public tool set, version 3
+const { tools } = await kit.tools.list(); // tools/list: the set's tools, with prices
+await kit.tools.call("acme__get_profile", { user: "x" }); // a provider tool: {handle}__{tool}, sent unchanged
+await everything.tools.call("get_weather", { city: "Lisbon" });
+```
+
+| Path                                         | Serves                                                                                        |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `/`                                          | Everything (default)                                                                          |
+| `/my/{slug}`, `/my/{slug}@{n}`               | your tool set: the Draft, or version `n`                                                      |
+| `/@{handle}/{slug}`, `/@{handle}/{slug}@{n}` | a public tool set                                                                             |
+| `/u/{token}`, `/u/{token}@{n}`               | a link-only tool set; the token is a secret, shown as `/u/…` in `toString`, `toJSON` and logs |
+| `/c/{category}`, `/@{handle}`                | one topic, one maker                                                                          |
+
+Filters on any path: `?tools=a,b` (one name gives a single-tool URL; `name@1` pins a contract major), `?category=x`, `?free=1`, `?discovery=auto|full|search`. A URL the server does not serve to your key throws `McpUrlNotFoundError`.
+
+Paid calls go through whatever URL you choose: the SDK keeps no per-URL paid list. To keep a client free-only, use a key without the `payments` scope, add `?free=1` to its URL, or refuse in `onPayment`. A tool set grant that allows its tools only through its own URL needs that URL; on `/` those tools are `TOOL_NOT_ALLOWED`.
+
 ## Paid call with a local key
 
 The SDK never stores or creates keys. You pass a signer; for a local key, wrap a viem account:
@@ -168,6 +198,7 @@ import {
   HumanSessionRequiredError,
   PaymentNetworkUnknownError,
   PaymentRefusedError,
+  McpUrlNotFoundError,
   PaymentRequiredError,
   RateLimitError,
   ScopeMissingError,
@@ -178,6 +209,7 @@ try {
 } catch (e) {
   if (e instanceof ScopeMissingError) console.error(`the API key needs the ${e.requiredScope} scope`);
   else if (e instanceof HumanSessionRequiredError) console.error("only a signed-in person can do this");
+  else if (e instanceof McpUrlNotFoundError) console.error("this MCP URL is not served to this key");
   else if (e instanceof PaymentRequiredError) console.error("paid tool: pass a signer");
   else if (e instanceof PaymentNetworkUnknownError) console.error(`network ${e.network} is not supported yet`);
   else if (e instanceof PaymentRefusedError) console.error(`refused before signing by ${e.guard}: ${e.code}`);
@@ -189,19 +221,19 @@ try {
 
 ## Options
 
-| Option               | Default                                                                        |
-| -------------------- | ------------------------------------------------------------------------------ |
-| `apiKey`             | `ASSAY_API_KEY`                                                                |
-| `mcpUrl`, `apiUrl`   | `https://mcp.goassay.ai/`, `https://api.goassay.ai/api/v1`                     |
-| `signer` / `signers` | none (free calls only)                                                         |
-| `networks`           | none (needed for paid calls)                                                   |
-| `limits`             | `{ maxPerCall: "0.50", maxPerDay: "5" }`                                       |
-| `onPayment`          | none                                                                           |
-| `fetch`              | the global `fetch`                                                             |
-| `timeoutMs`          | 120 000 per attempt                                                            |
-| `maxRetries`         | 2, with backoff, honouring `Retry-After`                                       |
-| `logger`             | silent; never logs keys, headers, bodies or signatures                         |
-| `now`, `sleep`       | the system clock (corrected by the server's `Date` for vouchers), `setTimeout` |
+| Option               | Default                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `apiKey`             | `ASSAY_API_KEY`                                                                                  |
+| `mcpUrl`, `apiUrl`   | `https://mcp.goassay.ai/` (a URL or a path; see "Choose a URL"), `https://api.goassay.ai/api/v1` |
+| `signer` / `signers` | none (free calls only)                                                                           |
+| `networks`           | none (needed for paid calls)                                                                     |
+| `limits`             | `{ maxPerCall: "0.50", maxPerDay: "5" }`                                                         |
+| `onPayment`          | none                                                                                             |
+| `fetch`              | the global `fetch`                                                                               |
+| `timeoutMs`          | 120 000 per attempt                                                                              |
+| `maxRetries`         | 2, with backoff, honouring `Retry-After`                                                         |
+| `logger`             | silent; never logs keys, headers, bodies or signatures                                           |
+| `now`, `sleep`       | the system clock (corrected by the server's `Date` for vouchers), `setTimeout`                   |
 
 The protocol core (EIP-712 voucher and binding, guards, clock) is at `@goassay-ai/sdk/core`.
 

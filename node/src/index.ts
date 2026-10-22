@@ -7,6 +7,7 @@ export {
   DelegateAlreadyBoundError,
   DelegateBindConflictError,
   HumanSessionRequiredError,
+  McpUrlNotFoundError,
   NetworkError,
   PaymentError,
   PaymentNetworkUnknownError,
@@ -26,6 +27,8 @@ export type { Eip155Network, Limits } from "./schemes/eip155/index.js";
 export type {
   CallOptions,
   CallReceipt,
+  ListOptions,
+  ListResult,
   SearchOptions,
   SearchResult,
   ToolInfo,

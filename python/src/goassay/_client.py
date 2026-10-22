@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import inspect
 import os
 import platform
@@ -12,11 +13,11 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from goassay import _tools
 from goassay._chain import ChainReader
 from goassay._context import Context
 from goassay._eip155 import DEFAULT_LIMITS, Eip155Scheme, check_limits
 from goassay._http import HttpConfig, Logger, origin_of
+from goassay._mcp_url import DEFAULT_MCP_ORIGIN, redact_mcp_url, resolve_mcp_url
 from goassay._networks import network_table
 from goassay._ops import CallOp, Flow, HttpOp, HttpResult, SleepOp
 from goassay._paid_calls import AsyncPaidCalls, PaidCalls
@@ -67,7 +68,7 @@ def _build_context(
         raise ConfigError("an API key is required: pass api_key or set ASSAY_API_KEY")
     if not re.fullmatch(r"[\x21-\x7e]+", key):
         raise ConfigError("api_key is not valid")
-    _check_url("mcp_url", mcp_url)
+    mcp_url = _check_url("mcp_url", resolve_mcp_url("mcp_url", mcp_url, DEFAULT_MCP_ORIGIN))
     api_url = _check_url("api_url", api_url).rstrip("/")
     web_origin = origin_of(_check_url("web_url", web_url))
     all_signers = tuple(([signer] if signer is not None else []) + list(signers or []))
@@ -108,8 +109,6 @@ def _build_context(
             networks=table,
             limits=check_limits(limits or DEFAULT_LIMITS),
             chain=ChainReader(now),
-            quote=lambda tool: _tools.quote_for(ctx, tool),
-            mcp_url=mcp_url,
             now=now,
             date_offset=lambda: http.date_offset,
         )
@@ -130,15 +129,29 @@ class _Base:
     _ctx: Context
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self._ctx.mcp_url})"
+        return f"{type(self).__name__}({redact_mcp_url(self._ctx.mcp_url)})"
+
+    def _sibling_context(self, url_or_path: str) -> Context:
+        """This client's context on another MCP URL: its own URL and quote cache, the rest shared."""
+        origin = origin_of(self._ctx.mcp_url)
+        url = resolve_mcp_url("url", url_or_path, origin)
+        if origin_of(url) != origin:
+            raise ConfigError("at() takes a path or a URL on this client's MCP origin; build a new client for another")
+        return dataclasses.replace(self._ctx, mcp_url=url)
 
 
 class Assay(_Base):
-    """The Assay client (sync). Stateless over HTTP; use it as a context manager to close it.
+    """The Assay client (sync), for one MCP URL. Stateless over HTTP; use it as a context manager to
+    close it.
 
-    - ``tools.search / get / call`` over MCP;
+    - ``tools.list / search / get / call`` over MCP;
     - ``receipts.get`` to see what a call cost;
-    - ``paid_calls.status / bind / wait_until_active`` to set up a payment key.
+    - ``paid_calls.status / bind / wait_until_active`` to set up a payment key;
+    - ``at(url)`` for a client on another MCP URL that shares this one's key, signers and limits.
+
+    ``mcp_url`` is a full URL or a path resolved against ``https://mcp.goassay.ai``, such as
+    ``"/my/research"``, ``"/@acme/kit@3"`` or ``"/?tools=get_weather"``, checked against the URL
+    shapes Assay serves. Paid calls go through whatever URL you choose.
 
     Every option has a default: the API key from ``ASSAY_API_KEY``, ``mcp.goassay.ai`` and
     ``api.goassay.ai``, ``portal.goassay.ai`` for the approval link, an ``httpx.Client``, 2 retries
@@ -192,6 +205,23 @@ class Assay(_Base):
         self.tools = Tools(self)
         self.receipts = Receipts(self)
         self.paid_calls = PaidCalls(self)
+
+    def at(self, url_or_path: str) -> Assay:
+        """A client on another MCP URL: a full URL on this client's MCP origin, or a path resolved
+        against it (``"/my/research"``, ``"/@acme/kit@3"``, ``"/?tools=get_weather"``). It shares
+        this client's API key, HTTP client, logger, signers, spend limits and ledger, ``on_payment``
+        and the in-flight calls by idempotency key, and has its own quote cache. Closing it does
+        nothing; close the client it came from."""
+        sibling = Assay.__new__(Assay)
+        sibling._ctx = self._sibling_context(url_or_path)
+        sibling._owns_client = False
+        sibling._client = self._client
+        sibling._sleep = self._sleep
+        sibling.networks = self.networks
+        sibling.tools = Tools(sibling, share=self.tools)
+        sibling.receipts = Receipts(sibling)
+        sibling.paid_calls = PaidCalls(sibling)
+        return sibling
 
     def _run(self, flow: Flow[T]) -> T:
         value: Any = None
@@ -284,6 +314,20 @@ class AsyncAssay(_Base):
         self.tools = AsyncTools(self)
         self.receipts = AsyncReceipts(self)
         self.paid_calls = AsyncPaidCalls(self)
+
+    def at(self, url_or_path: str) -> AsyncAssay:
+        """A client on another MCP URL, sharing everything but the URL and the quote cache; see
+        :meth:`Assay.at`."""
+        sibling = AsyncAssay.__new__(AsyncAssay)
+        sibling._ctx = self._sibling_context(url_or_path)
+        sibling._owns_client = False
+        sibling._client = self._client
+        sibling._sleep = self._sleep
+        sibling.networks = self.networks
+        sibling.tools = AsyncTools(sibling, share=self.tools)
+        sibling.receipts = AsyncReceipts(sibling)
+        sibling.paid_calls = AsyncPaidCalls(sibling)
+        return sibling
 
     async def _run(self, flow: Flow[T]) -> T:
         value: Any = None

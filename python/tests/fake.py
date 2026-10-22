@@ -142,7 +142,7 @@ class Fake:
 
         if seen.url.startswith("https://rpc"):
             return respond(Answer(_rpc(body)))
-        if seen.url == MCP:
+        if seen.url.startswith(MCP):
             out = self.mcp(body["params"], seen) if self.mcp else {}
             if isinstance(out, Answer):
                 return respond(out)

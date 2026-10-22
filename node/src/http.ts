@@ -1,5 +1,6 @@
 import { dateHeaderOffset } from "./core/clock.js";
 import { NetworkError, TimeoutError } from "./errors.js";
+import { redactMcpUrl } from "./mcp-url.js";
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -172,7 +173,8 @@ export class Http {
   }
 
   #log(req: HttpRequest, attempt: number, extra: Record<string, unknown>, started: number): void {
-    const path = new URL(req.url).pathname.split("/").slice(0, 4).join("/");
+    // A link-only token (`/u/{token}`) is a secret: logged as `/u/…`.
+    const path = redactMcpUrl(new URL(req.url).pathname.split("/").slice(0, 4).join("/"));
     this.#o.logger.debug(
       "assay request",
       redact({ method: req.method, path, attempt, ms: this.#o.now() - started, ...extra }),

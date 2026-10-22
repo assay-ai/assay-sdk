@@ -1,5 +1,5 @@
 import { isObject } from "./core/meta.js";
-import { AssayError, errorFromServer, RateLimitError, ServerError } from "./errors.js";
+import { AssayError, errorFromServer, McpUrlNotFoundError, RateLimitError, ServerError } from "./errors.js";
 import { RPC_RATE_LIMITED, retryAfterMs, type Http } from "./http.js";
 
 /** The MCP protocol revision this release speaks: per-request envelope, no handshake. */
@@ -52,6 +52,9 @@ export class McpTransport {
     });
     const msg = parseMessage(res.text, res.headers.get("content-type"));
     if (!isObject(msg) || msg.jsonrpc !== "2.0") {
+      // A 404 from the MCP host is always about the URL (MCP_URL_NOT_FOUND, sent as the REST
+      // envelope). The fixed message never repeats the URL, which may hold a link-only token.
+      if (res.status === 404) throw new McpUrlNotFoundError();
       throw (
         restError(res.status, res.text, res.headers.get("retry-after"), this.now()) ??
         new ServerError("MCP_BAD_ANSWER", "Assay sent an answer the SDK cannot read", { status: res.status })

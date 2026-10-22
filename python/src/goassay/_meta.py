@@ -12,6 +12,7 @@ PAYMENT_REQUIRED_META = "x402/paymentRequired"
 ERROR_META = "assay/error"
 RECEIPT_META = "assay/receipt"
 REPLAYED_META = "assay/replayed"
+PRICE_META = "assay/price"
 
 PAYMENT_REQUIRED_CODE = "PAYMENT_REQUIRED"
 DELEGATE_INACTIVE_CODE = "PAYMENT_VOUCHER_DELEGATE_INACTIVE"
@@ -31,6 +32,8 @@ def is_idempotency_key(value: object) -> bool:
 
 
 def is_tool_name(value: object) -> bool:
+    """A tool name as sent to the server, unchanged: a standard ``verb_noun``, or a provider tool's
+    ``{handle}__{tool}`` (for example ``acme__get_quote``). The server decides what it serves."""
     return isinstance(value, str) and _TOOL_NAME.fullmatch(value) is not None
 
 

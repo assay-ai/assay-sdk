@@ -320,10 +320,8 @@ def _run(ctx: dict[str, Any]) -> GuardResult:
     if not _is_number_int(timeout) or not 1 <= timeout <= MAX_TIMEOUT_SECONDS:  # type: ignore[operator]
         raise _refuse("G10", "G10_MAX_TIMEOUT", "the timeout is out of range")
 
-    # G11
-    canonical, paid_urls = ctx.get("canonicalUrl"), ctx.get("paidUrls")
-    if not (isinstance(canonical, str) and isinstance(paid_urls, list) and canonical in paid_urls):
-        raise _refuse("G11", "G11_URL_NOT_PAID", "paid calls through this server are off")
+    # G11 (a per-URL paid list) is app-only: the SDK has no such list, so paid calls go through
+    # whatever MCP URL the client was built for (spec section 9).
 
     # G12
     assert isinstance(resource, str)
@@ -375,7 +373,7 @@ def _is_number_int(v: object) -> bool:
 
 
 def check_all(ctx: dict[str, Any]) -> GuardResult:
-    """Runs G1..G12 in order, then the G7 confirmation. ``ok`` only when all pass; never raises."""
+    """Runs G1..G12 in order (G11 is app-only), then the G7 confirmation. ``ok`` only when all pass; never raises."""
     try:
         if not isinstance(ctx, dict):
             return GuardResult(False, "G1", "G1_NOT_A_REQUIREMENT", "there is no payment request")

@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from goassay import _ops
 from goassay._clock import date_header_offset
+from goassay._mcp_url import redact_mcp_url
 from goassay._ops import Flow, HttpOp, HttpResult
 from goassay.errors import NetworkError
 
@@ -145,7 +146,8 @@ def _backoff(attempt: int) -> float:
 def _log(cfg: HttpConfig, method: str, url: str, attempt: int, started: float, **extra: Any) -> None:
     if cfg.logger is None:
         return
-    path = "/".join(urlsplit(url).path.split("/")[:4])
+    # A link-only token (``/u/{token}``) is a secret: logged as ``/u/…``.
+    path = redact_mcp_url("/".join(urlsplit(url).path.split("/")[:4]))
     fields = redact(
         {"method": method, "path": path, "attempt": attempt, "ms": round((cfg.now() - started) * 1000), **extra}
     )

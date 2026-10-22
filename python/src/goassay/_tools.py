@@ -24,6 +24,7 @@ from goassay._meta import (
     IN_PROGRESS_CODE,
     PAYMENT_REQUIRED_CODE,
     PAYMENT_REQUIRED_META,
+    PRICE_META,
     RECEIPT_META,
     REPLAYED_META,
     SEARCH_TOOLS,
@@ -69,6 +70,17 @@ class ToolResult:
 class SearchResult:
     results: list[dict[str, Any]]
     next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class ToolList:
+    tools: list[dict[str, Any]]
+    """The tools this URL lists, as MCP describes them (``name``, ``inputSchema``, ``_meta`` ...)."""
+    next_cursor: str | None
+    meta: dict[str, Any]
+    """The list's ``_meta``, as sent: ``assay/toolsetVersion`` (a tool set URL without ``@n``),
+    ``assay/sharingEnds``, ``assay/renamed`` (an old handle) and ``assay/ignoredTools`` (``?tools=``
+    names this URL does not serve)."""
 
 
 def _assay_error(result: dict[str, Any]) -> dict[str, Any] | None:
@@ -170,6 +182,19 @@ def search(c: Context, query: str, options: dict[str, Any]) -> Flow[SearchResult
     return SearchResult(results, cursor if isinstance(cursor, str) else None)
 
 
+def list_tools(c: Context, cursor: str | None) -> Flow[ToolList]:
+    out = yield from c.mcp("tools/list", {} if cursor is None else {"cursor": cursor})
+    raw = out.get("tools")
+    tools = [t for t in raw if isinstance(t, dict) and is_tool_name(t.get("name"))] if isinstance(raw, list) else []
+    for t in tools:
+        meta = t.get("_meta")
+        q = quote_of(meta.get(PRICE_META)) if isinstance(meta, dict) else None
+        if q:
+            c.quotes.set(t["name"], q)
+    nxt, meta = out.get("nextCursor"), out.get("_meta")
+    return ToolList(tools, nxt if isinstance(nxt, str) else None, dict(meta) if isinstance(meta, dict) else {})
+
+
 def get(c: Context, name: str) -> Flow[dict[str, Any]]:
     out = yield from _meta_tool(c, GET_TOOL, {"name": name})
     if not isinstance(out.get("name"), str):
@@ -239,7 +264,12 @@ def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> 
         raise PaymentRefusedError("G1", "G1_NOT_FORWARDED", "the paid tool's name is not readable")
     assert isinstance(tool, str)
     prepared = yield from scheme.prepare(
-        requirement=requirement, tool=tool, called_at=called_at, signer=signer, idempotency_key=key
+        requirement=requirement,
+        tool=tool,
+        called_at=called_at,
+        signer=signer,
+        idempotency_key=key,
+        quote=lambda t: quote_for(c, t),
     )
     if isinstance(prepared, GuardResult):
         if prepared.code == "G2_NETWORK":
@@ -289,10 +319,19 @@ class Tools:
     """Tools over MCP. One logical call per idempotency key in a client: a second call with a key
     while the first runs (another thread) waits for it, so at most one voucher is signed for it."""
 
-    def __init__(self, client: Assay) -> None:
+    def __init__(self, client: Assay, share: Tools | None = None) -> None:
         self._c = client
-        self._lock = threading.Lock()
-        self._in_flight: dict[str, tuple[str, concurrent.futures.Future[ToolResult]]] = {}
+        # A sibling client (``at()``) shares its parent's in-flight calls, so one key is one call.
+        self._lock: threading.Lock = share._lock if share else threading.Lock()
+        self._in_flight: dict[str, tuple[str, concurrent.futures.Future[ToolResult]]] = (
+            share._in_flight if share else {}
+        )
+
+    def list(self, *, cursor: str | None = None) -> ToolList:
+        """``tools/list``: the tools this URL lists. A tool set, topic, maker or ``?tools=`` URL lists
+        its tools; Everything (``/``) lists only a few, plus ``search_tools``, ``get_tool`` and
+        ``call_tool``. Free. Each tool's ``_meta["assay/price"]`` is kept as its quote (G3)."""
+        return self._c._run(list_tools(self._c._ctx, cursor))
 
     def search(
         self,
@@ -342,9 +381,12 @@ class Tools:
 
 
 class AsyncTools:
-    def __init__(self, client: AsyncAssay) -> None:
+    def __init__(self, client: AsyncAssay, share: AsyncTools | None = None) -> None:
         self._c = client
-        self._in_flight: dict[str, tuple[str, asyncio.Future[ToolResult]]] = {}
+        self._in_flight: dict[str, tuple[str, asyncio.Future[ToolResult]]] = share._in_flight if share else {}
+
+    async def list(self, *, cursor: str | None = None) -> ToolList:
+        return await self._c._run(list_tools(self._c._ctx, cursor))
 
     async def search(
         self,

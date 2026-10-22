@@ -117,7 +117,7 @@ export function fakeClient(o: {
         headers: { "content-type": "application/json", date, ...a.headers },
       });
     if (url.startsWith("https://rpc")) return respond({ body: rpcAnswer(body) });
-    if (url === MCP) {
+    if (url.startsWith(MCP)) {
       const out = o.mcp?.(body.params, req);
       if (out && typeof out === "object" && "body" in out) return respond(out as Answer);
       return respond({ body: rpcResult(body.id, out ?? {}) });

@@ -226,23 +226,28 @@ class Eip155Scheme:
         networks: Mapping[str, NetworkEntry],
         limits: Mapping[str, str],
         chain: ChainReader,
-        quote: Callable[[str], Flow[dict[str, str] | None]],
-        mcp_url: str,
         now: Callable[[], float],
         date_offset: Callable[[], int],
     ) -> None:
         self.networks = networks
         self.limits = limits
         self.chain = chain
-        self.quote = quote
-        self.mcp_url = mcp_url
         self.now = now
         self.date_offset = date_offset
         self.recorded_payer: str | None = None
 
     def prepare(
-        self, *, requirement: Any, tool: str, called_at: int, signer: EvmSigner, idempotency_key: str
+        self,
+        *,
+        requirement: Any,
+        tool: str,
+        called_at: int,
+        signer: EvmSigner,
+        idempotency_key: str,
+        quote: Callable[[str], Flow[dict[str, str] | None]],
     ) -> Flow[Prepared | GuardResult]:
+        """Runs every local guard and builds the voucher; nothing is signed here. ``quote`` is the
+        G3 quote lookup of the calling client's URL (each URL has its own quote cache)."""
         try:
             local_key = to_checksum_address(signer.address)
         except (TypeError, ValueError):
@@ -268,7 +273,7 @@ class Eip155Scheme:
         if entry and payer:
             net = ChainNetwork(entry.id, entry.chain_id, entry.escrow, entry.rpc)
             chain = yield from self.chain.read(net, payer, local_key)
-        quote = yield from self.quote(tool)
+        tool_quote = yield from quote(tool)
 
         # No I/O from here to the spend record, and the ledger lock held throughout, so two calls in
         # flight (or two threads) cannot both pass the cap.
@@ -279,7 +284,7 @@ class Eip155Scheme:
                 entry,
                 payer,
                 chain,
-                quote,
+                tool_quote,
                 tool,
                 called_at,
                 signer,
@@ -320,8 +325,6 @@ class Eip155Scheme:
             },
             "signed": signed,
             "confirmation": None,
-            "canonicalUrl": self.mcp_url,
-            "paidUrls": [self.mcp_url],
             "nowSeconds": now,
         }
         built = guard_and_build(ctx, corrected_now(now, self.date_offset()), networks)

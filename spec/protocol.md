@@ -50,6 +50,28 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 - A success answer is `{"data": <value>}`.
 - A failure answer is `{"success": false, "error": {"code": "<CODE>", "message": "<text>", "statusCode": <status>, ...}}`. Clients branch on `error.code`, never on the message.
 
+### 2.3 MCP URLs
+
+The MCP host serves the same transport on every URL below; the URL chooses which tools a connection sees. One API key works on every URL.
+
+| Path | Serves |
+|---|---|
+| `/` | Everything: the whole listed catalogue (lists `search_tools`, `get_tool`, `call_tool` and a few tools) |
+| `/my/{slug}`, `/my/{slug}@{n}` | Your organisation's tool set: the live Draft, or published version `n` |
+| `/@{handle}/{slug}`, `/@{handle}/{slug}@{n}` | A public tool set: the latest public version, or version `n` |
+| `/u/{token}`, `/u/{token}@{n}` | A link-only tool set. The token is a secret: a client MUST NOT print or log it |
+| `/c/{category}` | Every listed tool in one topic |
+| `/@{handle}` | Every listed tool of one maker (`{handle}__{tool}` names only) |
+
+Grammar: `slug` `[a-z0-9-]{2,64}`, `handle` `[a-z][a-z0-9-]{2,23}`, `category` `[a-z][a-z0-9-]{1,63}`, `token` `[a-z0-9_-]{22,64}`, `n` `[1-9][0-9]{0,5}`. The path is read lowercased, `%40` as `@`, one trailing slash dropped; `//`, `.`, `..` and other percent-escapes are refused, and the URL is at most 2,048 characters.
+
+Query filters, on any path, only narrow what the URL serves: `tools=a,b` (at most 50 names; `name@N` pins a contract major; one name gives a single-tool URL), `category=x,y`, `free=0|1` (`free=1` keeps only free tools and never charges a call), `discovery=auto|full|search`.
+
+- A URL the host does not serve, or does not serve to this key, is HTTP `404` with `MCP_URL_NOT_FOUND` in the REST envelope (section 2.2), before any JSON-RPC is read.
+- The `tools/list` result's `_meta` MAY carry `assay/toolsetVersion`, `assay/sharingEnds`, `assay/renamed` and `assay/ignoredTools` (`tools=` names this URL does not serve).
+- The same tool can quote a different `assay/price` on two URLs (a tool set's entry rules apply), so a client keeps its quotes per URL.
+- Tool names are standard `verb_noun` names, or a provider tool's `{handle}__{tool}` (at most 48 characters; the first `__` separates the handle). A client sends names unchanged. A handle rename renames its tools, so read names from `tools/list` or `search_tools` rather than hard-coding them.
+
 ## 3. Calling a tool
 
 A tool call is an MCP `tools/call` request. Assay reads and writes extra fields in `params._meta` (request) and `result._meta` (answer).
@@ -298,7 +320,7 @@ A server can therefore move the client's clock by at most 120 seconds either way
 
 ## 9. Client guards
 
-Before it signs, a client checks the requirement locally. The reference implementations run twelve guards in order and stop at the first refusal; nothing is signed after a refusal. `vectors/eip155/guards.json` and `vectors/eip155/seq.json` pin the exact order, codes and boundaries.
+Before it signs, a client checks the requirement locally. The reference implementations run the guards in order and stop at the first refusal; nothing is signed after a refusal. `vectors/eip155/guards.json` and `vectors/eip155/seq.json` pin the exact order, codes and boundaries.
 
 | Guard | Checks |
 |---|---|
@@ -312,10 +334,16 @@ Before it signs, a client checks the requirement locally. The reference implemen
 | G8 | The provider is in the local allow-list, when one is set |
 | G9 | `1 <= seq < 2^53`, as a canonical decimal string |
 | G10 | `requestHash` is `sha256:<64 hex>`; `resource` is 1 to 2,048 Unicode code points; `maxTimeoutSeconds` is 1 to 300 |
-| G11 | Paid calls are switched on for the MCP URL in use |
+| G11 | App-only: paid calls are switched on for the MCP URL in use, in an app that keeps a per-URL paid list (the local `assay-mcp` app). The SDKs have no such list and skip G11 |
 | G12 | `resource` is exactly `/mcp/tools/<the tool called>`, and is not a debt or sequence endpoint |
 
-The minimum for an Assay-compatible client is G2, G5, G7 and G12. All twelve are strongly recommended.
+The minimum for an Assay-compatible client is G2, G5, G7 and G12. All the others are strongly recommended, G11 only for a client that keeps a per-URL paid list.
+
+**No per-URL paid list in the SDKs.** An SDK client makes paid calls through whatever MCP URL the developer built it for, within the local limits (G7). To keep a client, or one URL, free-only:
+
+- use an API key without the `payments` scope (a paid tool is then `AUTH_SCOPE_MISSING`, nothing is signed);
+- or add `?free=1` to the URL (paid-only tools are not served, and no call is charged);
+- or refuse in the `onPayment` / `on_payment` hook, which sees every payment before it is signed.
 
 ## 10. Results
 
@@ -367,6 +395,7 @@ Codes a client must know for this flow:
 | `MCP_QUOTA_EXCEEDED` | The free quota is used up | yes, later |
 | `MCP_VELOCITY_LIMIT_EXCEEDED` | Too many calls in a short window | yes, later |
 | `RATE_LIMITED` | Request rate limit; carries `retryAfterMs` | yes, after `retryAfterMs` |
+| `MCP_URL_NOT_FOUND` | The MCP host serves no such URL for this key (HTTP 404, section 2.3) | no |
 | `AUTH_SCOPE_MISSING` | The API key lacks a scope (HTTP 403); `context.requiredScope` names it (on a tool call, `assay/error.requiredScope`) | no |
 | `AUTH_HUMAN_SESSION_REQUIRED` | Only a signed-in person may do this, never an API key (HTTP 403) | no |
 | `ACCOUNT_DELEGATE_ALREADY_BOUND` | The payment key is bound to another live credential (HTTP 409) | no |

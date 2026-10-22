@@ -215,8 +215,19 @@ def via_scheme(ctx: dict[str, Any]) -> Any:
     return g.refusal if not g.ok else None
 
 
+# G11 (a per-URL paid list) is app-only (vectors/README.md): the SDK has no such list, so paid calls
+# go through whatever URL the client was built for, and its cases are not run here.
+APP_ONLY_GUARDS = {"G11"}
+
+
+def test_app_only_guard_cases_exist() -> None:
+    assert any(c["guard"] in APP_ONLY_GUARDS for c in GUARDS["cases"])
+
+
 @pytest.mark.parametrize("case", GUARDS["cases"], ids=lambda c: f"{c['guard']} {c['name']}")
 def test_guards(case: dict[str, Any]) -> None:
+    if case["guard"] in APP_ONLY_GUARDS:
+        pytest.skip("app-only: the SDK has no per-URL paid list")
     ctx = apply(BASE, case["changes"])
     for result in (check_all(ctx), via_scheme(ctx)):
         if case["expect"]["ok"]:

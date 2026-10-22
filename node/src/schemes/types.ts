@@ -1,3 +1,4 @@
+import type { PriceQuote } from "../core/meta.js";
 import type { Money } from "../core/voucher.js";
 import type { Signer } from "../signer.js";
 
@@ -26,6 +27,8 @@ export interface PrepareInput {
   calledAt: number;
   signer: Signer;
   idempotencyKey: string;
+  /** The quote for a tool (G3) on the calling client's URL: cached from list/search/get, or a fresh `get_tool`. */
+  quote: (tool: string) => Promise<PriceQuote | null>;
 }
 
 export type Prepared =

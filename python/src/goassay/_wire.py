@@ -9,7 +9,7 @@ from typing import Any
 from goassay import _http
 from goassay._http import HttpConfig, retry_after_seconds
 from goassay._ops import Flow
-from goassay.errors import AssayError, RateLimitError, ServerError, error_from_server
+from goassay.errors import AssayError, McpUrlNotFoundError, RateLimitError, ServerError, error_from_server
 
 MCP_PROTOCOL_VERSION = "2026-07-28"
 _ids = itertools.count(1)
@@ -87,6 +87,10 @@ def mcp_request(cfg: HttpConfig, url: str, method: str, params: dict[str, Any]) 
     msg = _parse(res.text, res.headers.get("content-type"))
     bad = ServerError("MCP_BAD_ANSWER", "Assay sent an answer the SDK cannot read", status=res.status)
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
+        # A 404 from the MCP host is always about the URL (MCP_URL_NOT_FOUND, sent as the REST
+        # envelope). The fixed message never repeats the URL, which may hold a link-only token.
+        if res.status == 404:
+            raise McpUrlNotFoundError()
         raise rest_error(res.status, res.text, res.headers.get("retry-after"), cfg.now()) or bad
     if isinstance(msg.get("error"), dict):
         raise _rpc_error(msg["error"], res.status, res.headers.get("retry-after"), cfg.now())
