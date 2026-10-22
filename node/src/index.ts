@@ -1,24 +1,32 @@
-/**
- * Pre-release. Only the protocol core is here so far; the client lands in a later release.
- */
+export { Assay, DEFAULT_API_URL, DEFAULT_MCP_URL, type AssayOptions } from "./client.js";
 export {
-  buildVoucher,
-  VOUCHER_DOMAIN_NAME,
-  VOUCHER_DOMAIN_VERSION,
-  VOUCHER_LIFETIME_SECONDS,
-  VOUCHER_TYPES,
-  type Money,
-  type NetworkEntry,
-  type VoucherRequirement,
-  type VoucherTypedData,
-  type WireVoucher,
-} from "./core/voucher.js";
-export {
-  bindingTypedData,
-  DELEGATE_BINDING_DOMAIN_NAME,
-  DELEGATE_BINDING_DOMAIN_VERSION,
-  DELEGATE_BINDING_TYPES,
-  MAX_BINDING_CHALLENGE_SECONDS,
-  type DelegateBindingTypedData,
-} from "./core/binding.js";
-export { SignerRefusal } from "./core/errors.js";
+  AssayError,
+  AuthError,
+  ConfigError,
+  NetworkError,
+  PaymentError,
+  PaymentRefusedError,
+  PaymentRequiredError,
+  PaymentSchemeUnsupportedError,
+  RateLimitError,
+  ScopeMissingError,
+  ServerError,
+  TimeoutError,
+} from "./errors.js";
+export { evmSigner, type EvmSigner, type Signer, type TypedData, type ViemLikeAccount } from "./signer.js";
+export type { Logger } from "./http.js";
+export type { OnPayment } from "./resources/context.js";
+export type { PaymentDetails } from "./schemes/types.js";
+export type { Eip155Network, Limits } from "./schemes/eip155/index.js";
+export type {
+  CallOptions,
+  CallReceipt,
+  SearchOptions,
+  SearchResult,
+  ToolInfo,
+  ToolResult,
+  ToolSummary,
+} from "./resources/tools.js";
+export type { Receipt } from "./resources/receipts.js";
+export type { BindResult, PaidCallsState, PaidCallsStatus, WaitOptions } from "./resources/paid-calls.js";
+export type { Money } from "./core/voucher.js";

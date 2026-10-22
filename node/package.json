@@ -19,7 +19,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    }
   },
   "files": [
     "dist",
@@ -38,7 +42,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "viem": "2.57.3"
+    "@noble/hashes": "1.8.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -48,6 +52,15 @@
     "prettier": "3.9.9",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.0",
+    "viem": "2.57.3",
     "vitest": "5.0.3"
+  },
+  "peerDependencies": {
+    "viem": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "viem": {
+      "optional": true
+    }
   }
 }

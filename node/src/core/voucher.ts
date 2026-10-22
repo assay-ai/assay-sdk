@@ -1,5 +1,5 @@
-import { getAddress, keccak256, stringToBytes, type Address, type Hex } from "viem";
 import { parseCaip10, parseCaip19Erc20 } from "./caip.js";
+import { getAddress, keccakUtf8, type Address, type Hex } from "./hex.js";
 import { SignerRefusal } from "./errors.js";
 
 /** The escrow's EIP-712 domain name and version (spec section 6.1). */
@@ -195,8 +195,8 @@ export function buildVoucher(
       payer,
       provider,
       amount,
-      // `stringToBytes`, not `toBytes`: a resource starting with `0x` is still a string.
-      resourceHash: keccak256(stringToBytes(requirement.resource)),
+      // The UTF-8 bytes: a resource starting with `0x` is still a string.
+      resourceHash: keccakUtf8(requirement.resource),
       requestHash,
       seq,
       issuedAt: BigInt(issuedAt),
