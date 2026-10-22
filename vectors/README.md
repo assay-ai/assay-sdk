@@ -4,7 +4,17 @@ Language-neutral test vectors for the [paid-call protocol](../spec/protocol.md).
 
 Implementations read these files and must not copy their values into code. A new file here fails the Node and Python tests until both list it.
 
-## Files
+## Layout
+
+Vectors are grouped by CAIP-2 namespace, because the voucher scheme and the key binding are chain-specific:
+
+| Folder | Namespace | Scheme |
+|---|---|---|
+| [`eip155/`](eip155) | EVM chains | EIP-712 `Voucher` and `DelegateBinding` |
+
+A new namespace (for example `solana/`) gets its own folder with the same kinds of files.
+
+## Files in `eip155/`
 
 | File | Spec | Contents |
 |---|---|---|

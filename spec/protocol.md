@@ -265,7 +265,7 @@ A server can therefore move the client's clock by at most 120 seconds either way
 
 ## 9. Client guards
 
-Before it signs, a client checks the requirement locally. The reference implementations run twelve guards in order and stop at the first refusal; nothing is signed after a refusal. `vectors/guards.json` and `vectors/seq.json` pin the exact order, codes and boundaries.
+Before it signs, a client checks the requirement locally. The reference implementations run twelve guards in order and stop at the first refusal; nothing is signed after a refusal. `vectors/eip155/guards.json` and `vectors/eip155/seq.json` pin the exact order, codes and boundaries.
 
 | Guard | Checks |
 |---|---|
@@ -340,7 +340,7 @@ A full, machine-readable code catalog will be published as `spec/errors.json`.
 
 ## 11. Conformance
 
-A client conforms to this version when it passes `vectors/vouchers.json` and `vectors/binding.json`. Passing `vectors/guards.json` and `vectors/seq.json` is strongly recommended. See [`../vectors/README.md`](../vectors/README.md).
+A client conforms to this version when it passes `vectors/eip155/vouchers.json` and `vectors/eip155/binding.json`. Passing `vectors/eip155/guards.json` and `vectors/eip155/seq.json` is strongly recommended. See [`../vectors/README.md`](../vectors/README.md).
 
 ## 12. Versions
 

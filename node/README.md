@@ -19,7 +19,7 @@ npm run typecheck
 npm test
 ```
 
-The tests run the shared vectors in [`../vectors`](../vectors).
+The tests run the shared vectors in [`../vectors`](../vectors) (`vectors/eip155/`).
 
 ## License
 

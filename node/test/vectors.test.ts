@@ -12,7 +12,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import { bindingTypedData, buildVoucher, type NetworkEntry, type VoucherRequirement } from "../src/index.js";
 
-const VECTORS_DIR = fileURLToPath(new URL("../../vectors/", import.meta.url));
+const VECTORS_DIR = fileURLToPath(new URL("../../vectors/eip155/", import.meta.url));
 const load = (name: string) => JSON.parse(readFileSync(`${VECTORS_DIR}${name}`, "utf8"));
 
 /** Files this test runs, and files a later milestone runs (with the reason). */
@@ -31,7 +31,7 @@ function asVector(td: { message: Record<string, unknown> } & Record<string, unkn
 }
 
 describe("every vector file is listed", () => {
-  it("lists each file in vectors/", () => {
+  it("lists each file in vectors/eip155/", () => {
     const files = readdirSync(VECTORS_DIR)
       .filter((f) => f.endsWith(".json"))
       .sort();

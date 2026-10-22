@@ -11,7 +11,7 @@ from eth_utils.crypto import keccak
 
 from goassay import binding_typed_data, build_voucher
 
-VECTORS = Path(__file__).resolve().parents[2] / "vectors"
+VECTORS = Path(__file__).resolve().parents[2] / "vectors" / "eip155"
 
 # Files this test runs, and files a later milestone runs (with the reason).
 RUN = ["binding.json", "vouchers.json"]
