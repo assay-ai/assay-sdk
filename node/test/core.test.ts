@@ -51,6 +51,32 @@ describe("meta helpers", () => {
     expect((long._meta as Record<string, unknown>)["assay/idempotency-key"]).toBe("k".repeat(128));
   });
 
+  it("prepareCallParams strips every host key in the assay/ and x402/ namespaces, keeps other keys", () => {
+    const p = prepareCallParams({
+      name: "t",
+      _meta: {
+        "assay/voucher": {},
+        "assay/rail": "A",
+        "assay/anything": 1,
+        "assay/receipt": {},
+        "x402/payment": "0x00",
+        "x402/paymentRequired": {},
+        "assay/idempotency-key": "k1",
+        progressToken: "p1",
+        "vendor/x": true,
+        "assayx/keep": 2,
+        "x402-keep": 3,
+      },
+    });
+    expect(p._meta).toEqual({
+      "assay/idempotency-key": "k1",
+      progressToken: "p1",
+      "vendor/x": true,
+      "assayx/keep": 2,
+      "x402-keep": 3,
+    });
+  });
+
   it("withVoucher adds the voucher and changes nothing else", () => {
     const params = { name: "t", _meta: { "assay/idempotency-key": "k1" } };
     const envelope = { voucher: { seq: "1" }, signature: "0x00", providerId: "p" };
@@ -126,6 +152,19 @@ describe("meta helpers", () => {
     expect(enablePaidLink("http://localhost:4000", "../x", a)).toBeNull();
     expect(enablePaidLink("<WEB from ops config>", CREDENTIAL_ID, a)).toBeNull();
     expect(enablePaidLink("http://localhost:4000", CREDENTIAL_ID, "0x123")).toBeNull();
+    expect(enablePaidLink("https://user:pw@portal.goassay.ai", CREDENTIAL_ID, a)).toBeNull();
+    expect(enablePaidLink("ftp://portal.goassay.ai", CREDENTIAL_ID, a)).toBeNull();
+  });
+
+  it("the enable-paid link keeps the web app's path, without a trailing slash, query or fragment", () => {
+    const a = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    const link = (base: string) => `${base}/agents/enable-paid?credential=${CREDENTIAL_ID}#key=${a}`;
+    expect(enablePaidLink("https://host.example/app", CREDENTIAL_ID, a)).toBe(link("https://host.example/app"));
+    expect(enablePaidLink("https://host.example/app/", CREDENTIAL_ID, a)).toBe(link("https://host.example/app"));
+    expect(enablePaidLink("https://host.example/a/b//", CREDENTIAL_ID, a)).toBe(link("https://host.example/a/b"));
+    expect(enablePaidLink("https://host.example/", CREDENTIAL_ID, a)).toBe(link("https://host.example"));
+    expect(enablePaidLink("https://host.example/app?x=1#y", CREDENTIAL_ID, a)).toBe(link("https://host.example/app"));
+    expect(enablePaidLink("https://host.example/app/../x", CREDENTIAL_ID, a)).toBe(link("https://host.example/x"));
   });
 
   it("the server approvalUrl is used only on the configured web origin and only for this key", () => {

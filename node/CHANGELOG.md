@@ -2,6 +2,13 @@
 
 All notable changes to `@goassay-ai/sdk` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
+## 0.2.1 - 2026-10-23
+
+### Fixed
+
+- `prepareCallParams` (`@goassay-ai/sdk/core`) removes every host-supplied `_meta` key in the `assay/` and `x402/` namespaces, not only `assay/voucher` and `assay/rail`. A valid host `assay/idempotency-key` is still kept; other keys (for example `progressToken`) pass through unchanged.
+- `enablePaidLink` (`@goassay-ai/sdk/core`) keeps the path of the configured web app URL (`https://host/app` gives `https://host/app/agents/enable-paid?...`; a trailing slash is dropped) instead of linking to the bare origin.
+
 ## 0.2.0 - 2026-10-23
 
 Additive: nothing changes for code written against 0.1.0.

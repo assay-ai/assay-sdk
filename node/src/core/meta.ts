@@ -109,16 +109,21 @@ export function fingerprint(address: string): string {
 
 // ---- for tools built on the protocol (ported from assay-mcp) --------------------------------
 
+/** `_meta` key namespaces only Assay writes; a host never supplies them. */
+const ASSAY_NAMESPACES = ["assay/", "x402/"];
+
 /**
- * The params to forward for a host `tools/call`. A host-supplied `assay/voucher` and `assay/rail`
- * are removed (only the caller signs); `assay/idempotency-key` is kept when the host sent one the
- * server accepts, else a UUIDv4 is added. Other keys are kept. Returns a new object; the input is
- * not changed.
+ * The params to forward for a host `tools/call`. Every host-supplied key in the `assay/` or `x402/`
+ * namespace is removed (only the caller signs and sets them, for example `assay/voucher` and
+ * `assay/rail`), except `assay/idempotency-key`, which is kept when the host sent one the server
+ * accepts, else a UUIDv4 is added. Other keys are kept. Returns a new object; the input is not
+ * changed.
  */
 export function prepareCallParams(params: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const meta: Record<string, unknown> = isObject(params._meta) ? { ...params._meta } : {};
-  delete meta[VOUCHER_META];
-  delete meta[RAIL_META];
+  for (const key of Object.keys(meta)) {
+    if (key !== IDEMPOTENCY_META && ASSAY_NAMESPACES.some((ns) => key.startsWith(ns))) delete meta[key];
+  }
   if (!isIdempotencyKey(meta[IDEMPOTENCY_META])) meta[IDEMPOTENCY_META] = randomUUID();
   return { ...params, _meta: meta };
 }
@@ -208,8 +213,9 @@ export function paidToolOf(tool: string, params: Readonly<Record<string, unknown
 }
 
 /**
- * `{web}/agents/enable-paid?credential={id}#key={address}`: only from an http(s) web origin
- * without user info, a UUID credential id and a checked address; `null` otherwise.
+ * `{web}/agents/enable-paid?credential={id}#key={address}`: only from an http(s) web app URL
+ * without user info, a UUID credential id and a checked address; `null` otherwise. The web app
+ * URL's path is kept (a trailing slash dropped); its query and fragment are not used.
  */
 export function enablePaidLink(web: string, credentialId: string, address: string): string | null {
   let base: URL;
@@ -221,7 +227,8 @@ export function enablePaidLink(web: string, credentialId: string, address: strin
   if (!/^https?:$/.test(base.protocol) || base.username || base.password) return null;
   if (!UUID.test(credentialId)) return null;
   if (!isAddress(address)) return null;
-  return `${base.origin}/agents/enable-paid?credential=${credentialId}#key=${getAddress(address)}`;
+  const path = base.pathname.replace(/\/+$/, "");
+  return `${base.origin}${path}/agents/enable-paid?credential=${credentialId}#key=${getAddress(address)}`;
 }
 
 /**
