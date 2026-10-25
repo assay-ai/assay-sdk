@@ -269,7 +269,7 @@ describe("networkEntriesFrom", () => {
       { skip: (_id, n) => n.escrow.includes("<") },
     );
     expect([...table.keys()]).toEqual(["eip155:46630"]);
-    expect(table.get("eip155:46630")!.escrow).toBe("0x2723AD1fEC053Fe05305e4D0c874B0402959Ce18");
+    expect(table.get("eip155:46630")!.escrow).toBe("0xE68A6E2810027dB5da48c2110bd3993eD8177115");
   });
 
   it("an invalid entry it does not skip fails, naming it", () => {

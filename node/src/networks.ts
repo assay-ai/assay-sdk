@@ -22,7 +22,7 @@ import { eip155Networks, type Eip155Network, type NetworkEntry } from "./schemes
 export const BUILT_IN_NETWORKS: Readonly<Record<string, Eip155Network>> = Object.freeze({
   "eip155:46630": Object.freeze({
     chainId: 46630,
-    escrow: "eip155:46630:0x2723AD1fEC053Fe05305e4D0c874B0402959Ce18",
+    escrow: "eip155:46630:0xE68A6E2810027dB5da48c2110bd3993eD8177115",
     asset: "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3",
     decimals: 6,
     rpcUrls: Object.freeze([

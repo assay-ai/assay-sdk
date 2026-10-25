@@ -2,6 +2,12 @@
 
 All notable changes to `goassay` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
+## 0.1.2 - 2026-10-25
+
+### Fixed
+
+- The built-in `eip155:46630` network now names the redeployed production escrow `0xE68A6E2810027dB5da48c2110bd3993eD8177115`. The previous release pinned the escrow of the first production deployment, which is no longer used, so paid calls on the built-in table were refused.
+
 ## 0.1.1 - 2026-10-23
 
 ### Fixed
