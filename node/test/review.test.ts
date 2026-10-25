@@ -170,7 +170,7 @@ describe("networks: pinned in the SDK, never read from the server", () => {
   it("the built-in table pins Robinhood Chain testnet, read through two RPC operators", () => {
     expect(Object.keys(BUILT_IN_NETWORKS)).toEqual(["eip155:46630"]);
     const n = BUILT_IN_NETWORKS["eip155:46630"]!;
-    expect(n.escrow).toBe("eip155:46630:0x2723AD1fEC053Fe05305e4D0c874B0402959Ce18");
+    expect(n.escrow).toBe("eip155:46630:0xE68A6E2810027dB5da48c2110bd3993eD8177115");
     expect(n.asset).toBe("eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3");
     expect(n.decimals).toBe(6);
     expect(new Set(n.rpcUrls.map((u) => new URL(u).host)).size).toBe(2);

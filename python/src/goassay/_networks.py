@@ -31,7 +31,7 @@ BUILT_IN_NETWORKS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
         "eip155:46630": MappingProxyType(
             {
                 "chainId": 46630,
-                "escrow": "eip155:46630:0x2723AD1fEC053Fe05305e4D0c874B0402959Ce18",
+                "escrow": "eip155:46630:0xE68A6E2810027dB5da48c2110bd3993eD8177115",
                 "asset": "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3",
                 "decimals": 6,
                 "rpcUrls": ["https://rpc.testnet.chain.robinhood.com", "https://robinhood-sepolia-rpc.publicnode.com"],
