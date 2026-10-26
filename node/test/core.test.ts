@@ -260,16 +260,16 @@ describe("guard options", () => {
 });
 
 describe("networkEntriesFrom", () => {
-  const good = BUILT_IN_NETWORKS["eip155:46630"]!;
+  const good = BUILT_IN_NETWORKS["eip155:4663"]!;
   const placeholder = { ...good, chainId: 1, escrow: "eip155:1:<ESCROW>", asset: "eip155:1/erc20:<ASSET>" };
 
   it("skips the entries the caller names, and builds the rest", () => {
     const table = networkEntriesFrom(
-      { "eip155:46630": good, "eip155:1": placeholder, "solana:x": good },
+      { "eip155:4663": good, "eip155:1": placeholder, "solana:x": good },
       { skip: (_id, n) => n.escrow.includes("<") },
     );
-    expect([...table.keys()]).toEqual(["eip155:46630"]);
-    expect(table.get("eip155:46630")!.escrow).toBe("0xE68A6E2810027dB5da48c2110bd3993eD8177115");
+    expect([...table.keys()]).toEqual(["eip155:4663"]);
+    expect(table.get("eip155:4663")!.escrow).toBe("0xe54E0142b1D0d34226498D563A16074C81Bc9A5e");
   });
 
   it("an invalid entry it does not skip fails, naming it", () => {
