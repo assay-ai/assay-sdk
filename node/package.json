@@ -1,6 +1,6 @@
 {
   "name": "@goassay-ai/sdk",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Call tools through Assay over MCP, with free and paid calls signed by your own key.",
   "license": "MIT",
   "repository": {
