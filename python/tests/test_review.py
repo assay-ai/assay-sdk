@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 import re
 import threading
 import time
@@ -227,12 +228,19 @@ def test_i5_default_web_url_is_the_portal() -> None:
 # --- networks: pinned in the SDK ----------------------------------------------------------
 
 
-def test_built_in_table_pins_robinhood_testnet() -> None:
-    assert list(BUILT_IN_NETWORKS) == ["eip155:46630"]
-    n = BUILT_IN_NETWORKS["eip155:46630"]
-    assert n["escrow"] == "eip155:46630:0xE68A6E2810027dB5da48c2110bd3993eD8177115"
-    assert n["asset"] == "eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3"
+def test_built_in_table_pins_robinhood_mainnet() -> None:
+    assert list(BUILT_IN_NETWORKS) == ["eip155:4663"]
+    n = BUILT_IN_NETWORKS["eip155:4663"]
+    assert n["chainId"] == 4663
+    assert n["escrow"] == "eip155:4663:0xe54E0142b1D0d34226498D563A16074C81Bc9A5e"
+    assert n["asset"] == "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
     assert n["decimals"] == 6
+    # The vector signed for this escrow carries its on-chain DOMAIN_SEPARATOR().
+    vectors = json.loads(
+        (Path(__file__).resolve().parents[2] / "vectors" / "eip155" / "vouchers.json").read_text(encoding="utf-8")
+    )
+    mainnet = next(c for c in vectors["cases"] if c["name"] == "robinhood-mainnet-escrow")
+    assert mainnet["network"] == {"caip2": "eip155:4663", "escrow": n["escrow"], "asset": n["asset"], "decimals": 6}
     assert len({u.split("/")[2] for u in n["rpcUrls"]}) == 2
 
 

@@ -167,12 +167,19 @@ describe("I5 approval link from webUrl", () => {
 });
 
 describe("networks: pinned in the SDK, never read from the server", () => {
-  it("the built-in table pins Robinhood Chain testnet, read through two RPC operators", () => {
-    expect(Object.keys(BUILT_IN_NETWORKS)).toEqual(["eip155:46630"]);
-    const n = BUILT_IN_NETWORKS["eip155:46630"]!;
-    expect(n.escrow).toBe("eip155:46630:0xE68A6E2810027dB5da48c2110bd3993eD8177115");
-    expect(n.asset).toBe("eip155:46630/erc20:0xDbbC156dD414f43f2c952C1Be0f16A0B9a826Cd3");
+  it("the built-in table pins Robinhood Chain mainnet, read through two RPC operators", () => {
+    expect(Object.keys(BUILT_IN_NETWORKS)).toEqual(["eip155:4663"]);
+    const n = BUILT_IN_NETWORKS["eip155:4663"]!;
+    expect(n.chainId).toBe(4663);
+    expect(n.escrow).toBe("eip155:4663:0xe54E0142b1D0d34226498D563A16074C81Bc9A5e");
+    expect(n.asset).toBe("eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168");
     expect(n.decimals).toBe(6);
+    // The vector signed for this escrow carries its on-chain DOMAIN_SEPARATOR().
+    const vectors = JSON.parse(
+      readFileSync(new URL("../../vectors/eip155/vouchers.json", import.meta.url), "utf8"),
+    ) as { cases: { name: string; network: Record<string, unknown> }[] };
+    const mainnet = vectors.cases.find((c) => c.name === "robinhood-mainnet-escrow")!;
+    expect(mainnet.network).toEqual({ caip2: "eip155:4663", escrow: n.escrow, asset: n.asset, decimals: n.decimals });
     expect(new Set(n.rpcUrls.map((u) => new URL(u).host)).size).toBe(2);
     expect(Object.isFrozen(n)).toBe(true);
   });

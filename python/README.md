@@ -132,7 +132,7 @@ Answer quickly: the voucher's lifetime (at most 240 s) starts before the hook ru
 
 Payments are checked against a network table the client holds (escrow, asset, decimals and RPC URLs per network), never against what the server says, so a compromised API cannot redirect a payment.
 
-- The SDK ships a built-in table, pinned in the release; an address change ships as a new SDK release. It holds Robinhood Chain testnet (`eip155:46630`), the network Assay's production runs on today: the USDG escrow `0x2723…Ce18`, 6 decimals, and two public RPCs from different operators. A paid call or a bind on a network that is in no table is refused with `PaymentNetworkUnknownError`, which names the network.
+- The SDK ships a built-in table, pinned in the release; an address change ships as a new SDK release. It holds Robinhood Chain mainnet (`eip155:4663`), the network Assay's production runs on: the USDG escrow `0xe54E…9A5e` (USDG `0x5fc5…d168`), 6 decimals, and two public RPCs from different operators. Robinhood Chain testnet (`eip155:46630`) is not built in: a deployment on testnet, such as a development one, is configured with `networks` (below). A paid call or a bind on a network that is in no table is refused with `PaymentNetworkUnknownError`, which names the network.
 - `networks=` configures any chain yourself: a test chain, or another deployment together with its own `mcp_url`, `api_url` and `web_url`. Your entries are merged over the built-in table. A new network is added; an entry for a built-in network replaces it whole, so fields are never mixed from two deployments.
 - `rpc_urls={"eip155:<chainId>": ["https://your-rpc"]}` replaces only a network's RPC URLs, for example with your private RPC.
 

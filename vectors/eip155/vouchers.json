@@ -437,6 +437,114 @@
       "structHash": "0x99cd0ad11c8bfb21b9c4e1804b8f45e0fc1bcb9794ccfc64ef37e11e277ad375",
       "digest": "0xded1926affa55e4f207e7a63e6bbffbf70e2e3b1428a7d3395eef526e4e39049",
       "signature": "0xb400f6441fdd96695223bfb34d780d50fea29d81287977593dcb8901850d4abf4635d14afe01fcd2387bd0d987aa59d76fe50639c71bc961b66f9a462ff86bdd1c"
+    },
+    {
+      "name": "robinhood-mainnet-escrow",
+      "note": "Robinhood Chain mainnet (eip155:4663): the production AssayEscrow and USDG. Its domain separator equals the escrow's on-chain DOMAIN_SEPARATOR().",
+      "network": {
+        "caip2": "eip155:4663",
+        "escrow": "eip155:4663:0xe54E0142b1D0d34226498D563A16074C81Bc9A5e",
+        "asset": "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+        "decimals": 6
+      },
+      "requirement": {
+        "rail": "B",
+        "scheme": "voucher",
+        "network": "eip155:4663",
+        "payer": "eip155:4663:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "payTo": "eip155:4663:0xe54E0142b1D0d34226498D563A16074C81Bc9A5e",
+        "provider": "eip155:4663:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "providerId": "00000000-0000-4000-8000-000000000001",
+        "amount": {
+          "amount": "100000",
+          "asset": "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+          "decimals": 6
+        },
+        "resource": "https://mcp.example.com/tools/get_weather",
+        "requestHash": "sha256:5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f",
+        "seq": "7",
+        "maxTimeoutSeconds": 300,
+        "signers": [
+          "payer",
+          "delegate"
+        ],
+        "delegate": "eip155:4663:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "issuedAt": 1786000000,
+      "wire": {
+        "payer": "eip155:4663:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "payTo": "eip155:4663:0xe54E0142b1D0d34226498D563A16074C81Bc9A5e",
+        "provider": "eip155:4663:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "amount": {
+          "amount": "100000",
+          "asset": "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+          "decimals": 6
+        },
+        "resource": "https://mcp.example.com/tools/get_weather",
+        "requestHash": "sha256:5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f",
+        "seq": "7",
+        "issuedAt": 1786000000,
+        "expiresAt": 1786000240
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 4663,
+          "verifyingContract": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e"
+        },
+        "types": {
+          "Voucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint64"
+            },
+            {
+              "name": "resourceHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "requestHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "seq",
+              "type": "uint64"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "Voucher",
+        "message": {
+          "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+          "amount": "100000",
+          "resourceHash": "0xd3f3d7214ead11b675c1d6ec3d58986fb87249ca16df797d1b7272536858c662",
+          "requestHash": "0x5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f",
+          "seq": "7",
+          "issuedAt": "1786000000",
+          "expiresAt": "1786000240"
+        }
+      },
+      "domainSeparator": "0x8af355df3c16d2a6ba6b83f787f6886d63b19cd54f241cb88203121fdd9e4010",
+      "structHash": "0xbffa904d3a77124016e6349f6b23c26390cc22a1eba9da2fd85fe1da18833bc6",
+      "digest": "0xb7a00757dd78e944c8b276fcb5f2543e1476e391ddfeddd381043b1ff88cfcce",
+      "signature": "0xd03e51de59fa15e1c51b575f620a65857202960b8e240185ae640cf3f8430a8f72b2dab070fc4af8b26f09f3fa304bb4722b40e502b7c327cdbabff7748190b51c"
     }
   ]
 }
