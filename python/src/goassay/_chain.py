@@ -2,6 +2,15 @@
 
 Three escrow views at one pinned block on every RPC the caller listed; every RPC must answer
 the same chain id and the same bytes, or there is no read (the guards then refuse).
+
+The pinned block is ``min(heights) - 1``, so RPCs some blocks apart still agree; heights more than
+``MAX_BLOCK_SPREAD`` apart refuse. A transient failure (an RPC error or timeout, or heights too
+far apart) runs the whole read again, at most ``READ_ATTEMPTS`` times in all, after
+``RETRY_DELAYS``; no new attempt starts once ``RETRY_WINDOW`` seconds have passed. Each attempt
+pins its own block and needs every RPC again. A disagreement at the pinned block is never retried:
+two RPCs serving different bytes for the same block is a real conflict, and a later attempt that
+happens to agree would hide it. Another chain id, no block to pin and a malformed answer are final
+too. Failures are not cached.
 """
 
 from __future__ import annotations
@@ -10,6 +19,7 @@ import itertools
 import json
 import math
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -20,12 +30,21 @@ from goassay import _ops
 from goassay._ops import Flow, HttpOp
 
 CHAIN_CACHE_SECONDS = 600.0
-MAX_BLOCK_SPREAD = 5
+# About 20 s on Robinhood Chain (~6 blocks/s), whose public RPCs are often 10 to 40 blocks apart.
+# It only bounds how stale the pinned block can be; agreement comes from one explicit block.
+MAX_BLOCK_SPREAD = 120
+# Attempts of the whole read, including the first; the waits before the second and the third;
+# and the time after which no new attempt starts (seconds).
+READ_ATTEMPTS = 3
+RETRY_DELAYS = (0.3, 1.0)
+RETRY_WINDOW = 5.0
 _MAX_RESPONSE_CHARS = 16 * 1024
 _RPC_TIMEOUT = 5.0
 _LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "::1"}
 _QUANTITY = re.compile(r"0x(?:0|[1-9a-fA-F][0-9a-fA-F]{0,15})")
 _ids = itertools.count(1)
+# An attempt that failed in a way another attempt may not (an RPC error, heights apart).
+_TRANSIENT = object()
 
 
 def _selector(signature: str) -> str:
@@ -80,8 +99,9 @@ def _quantity(value: object) -> int | None:
 
 
 class ChainReader:
-    def __init__(self, now: Any) -> None:
+    def __init__(self, now: Any, monotonic: Any = time.monotonic) -> None:
         self._now = now
+        self._monotonic = monotonic
         self._cache: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
 
     def read(self, net: ChainNetwork, payer: str, delegate: str) -> Flow[dict[str, Any] | None]:
@@ -91,10 +111,7 @@ class ChainReader:
         if hit and 0 <= t - hit[0] < CHAIN_CACHE_SECONDS:
             return hit[1]
         self._cache.pop(key, None)
-        try:
-            value = yield from self._read_once(net, payer, delegate, math.floor(t))
-        except Exception:
-            value = None
+        value = yield from self._read_with_retry(net, payer, delegate, math.floor(t))
         if value is not None:
             self._cache[key] = (t, value)
         return value
@@ -102,7 +119,27 @@ class ChainReader:
     def invalidate(self, net: str, payer: str, delegate: str) -> None:
         self._cache.pop((net, payer, delegate), None)
 
-    def _read_once(self, net: ChainNetwork, payer: str, delegate: str, read_at: int) -> Flow[dict[str, Any] | None]:
+    def _read_with_retry(
+        self, net: ChainNetwork, payer: str, delegate: str, read_at: int
+    ) -> Flow[dict[str, Any] | None]:
+        """The whole read, run again on a transient failure (see the module docstring)."""
+        started = self._monotonic()
+        attempt = 1
+        while True:
+            try:
+                value = yield from self._read_once(net, payer, delegate, read_at)
+            except Exception:
+                value = _TRANSIENT
+            if value is not _TRANSIENT:
+                return value  # type: ignore[no-any-return]
+            delay = RETRY_DELAYS[attempt - 1] if attempt - 1 < len(RETRY_DELAYS) else 0.0
+            if attempt >= READ_ATTEMPTS or self._monotonic() - started + delay > RETRY_WINDOW:
+                return None
+            yield from _ops.sleep(delay)
+            attempt += 1
+
+    def _read_once(self, net: ChainNetwork, payer: str, delegate: str, read_at: int) -> Flow[Any]:
+        """One attempt: the read, ``None`` (final) or ``_TRANSIENT``; an RPC that fails raises."""
         rpcs = net.rpc
         if not rpcs or len(set(rpcs)) != len(rpcs) or not all(is_usable_rpc_url(u) for u in rpcs):
             return None
@@ -114,7 +151,9 @@ class ChainReader:
                 return None
             heights.append(height)
         low, high = min(heights), max(heights)
-        if high - low > MAX_BLOCK_SPREAD or low < 1:
+        if high - low > MAX_BLOCK_SPREAD:
+            return _TRANSIENT
+        if low < 1:
             return None
         block = hex(low - 1)
         calls = [
@@ -129,6 +168,7 @@ class ChainReader:
                 r = yield from self._call(url, "eth_call", [{"to": net.escrow, "data": data}, block])
                 row.append(str(r).lower())
             answers.append(row)
+        # A disagreement at the pinned block is final (no retry).
         if any(a != answers[0] for a in answers):
             return None
         d = _words(answers[0][0], _DELEGATION_WIDTHS)

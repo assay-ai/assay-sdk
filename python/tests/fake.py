@@ -127,6 +127,8 @@ class SpySigner:
 class Fake:
     mcp: McpHandler | None = None
     api: ApiHandler | None = None
+    # Answers a chain RPC request in place of the base context's view (None: the view).
+    rpc: ApiHandler | None = None
     seen: list[Seen] = field(default_factory=list)
     sleeps: list[float] = field(default_factory=list)
     signer: SpySigner = field(default_factory=SpySigner)
@@ -141,7 +143,8 @@ class Fake:
             return httpx.Response(a.status, json=a.body, headers={"date": date, **a.headers})
 
         if seen.url.startswith("https://rpc"):
-            return respond(Answer(_rpc(body)))
+            custom = self.rpc(seen) if self.rpc else None
+            return respond(custom if custom is not None else Answer(_rpc(body)))
         if seen.url.startswith(MCP):
             out = self.mcp(body["params"], seen) if self.mcp else {}
             if isinstance(out, Answer):

@@ -2,6 +2,14 @@
 
 All notable changes to `goassay` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
+## Unreleased
+
+### Fixed
+
+- Chain reads of the payment key's grant (G4, G6) accept RPCs up to 120 blocks apart (`MAX_BLOCK_SPREAD`, was 5; about 20 s on Robinhood Chain). The two public RPCs are often 10 to 40 blocks apart, so about half of the reads failed and paid calls were refused right after a grant. Reads still run at one explicit pinned block, `min(heights) - 1`, on every RPC, and the answers must be byte-identical.
+- A transient chain-read failure (an RPC error or timeout, or heights too far apart) runs the whole read again: 3 attempts in all, after 300 ms and 1 s, and no new attempt starts 5 s after the first. A disagreement at the pinned block is final and is not retried. Failures are still not cached.
+- The `G4_NO_CHAIN_READ` refusal now says to try again in a minute.
+
 ## 0.1.2 - 2026-10-25
 
 ### Fixed

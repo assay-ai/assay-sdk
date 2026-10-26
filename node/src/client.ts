@@ -193,7 +193,7 @@ function buildContext(options: AssayOptions): ClientContext {
         networks,
         limits: checkLimits(options.limits ?? DEFAULT_LIMITS),
         // Chain reads go to the caller's RPCs, without the API key.
-        chain: new ChainReader({ fetch: fetchFn, now }),
+        chain: new ChainReader({ fetch: fetchFn, now, sleep }),
         now,
         dateOffset: () => http.dateOffset,
       }),

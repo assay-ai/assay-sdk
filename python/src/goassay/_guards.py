@@ -215,7 +215,9 @@ def _run(ctx: dict[str, Any]) -> GuardResult:
     if recorded is not None and _local_account(recorded, chain_id) != payer:
         raise _refuse("G4", "G4_PAYER_CHANGED", PAYER_CHANGED_REASON)
     chain = ctx.get("chain")
-    no_read = _refuse("G4", "G4_NO_CHAIN_READ", "the payment key's grant could not be read from the chain")
+    no_read = _refuse(
+        "G4", "G4_NO_CHAIN_READ", "the payment key's grant could not be read from the chain; try again in a minute"
+    )
     if not isinstance(chain, dict):
         raise no_read
     valid_until = _uint(chain.get("validUntil"), _MAX_UINT64, True)
