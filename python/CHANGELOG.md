@@ -2,6 +2,16 @@
 
 All notable changes to `goassay` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
+## 0.2.0 - 2026-10-27
+
+### Changed
+
+- **Production moved to Robinhood Chain mainnet.** The built-in network table now holds `eip155:4663` only: the AssayEscrow `0xe54E0142b1D0d34226498D563A16074C81Bc9A5e`, USDG `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (6 decimals) and two public RPCs from different operators (`https://rpc.mainnet.chain.robinhood.com`, `https://robinhood-rpc.publicnode.com`). Robinhood Chain testnet (`eip155:46630`) is no longer built in: a paid call or a bind against a testnet deployment needs a `networks=` entry for it. Earlier releases are testnet builds.
+
+### Added
+
+- The `robinhood-mainnet-escrow` voucher vector, signed for the mainnet escrow; its domain separator equals the escrow's on-chain `DOMAIN_SEPARATOR()`.
+
 ## 0.1.3 - 2026-10-26
 
 ### Fixed

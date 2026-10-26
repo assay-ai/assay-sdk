@@ -1,6 +1,6 @@
 """The Assay SDK: call tools over MCP, with free calls and paid calls signed by a key you hold."""
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 
 from goassay import errors  # noqa: E402
 from goassay._client import (  # noqa: E402
