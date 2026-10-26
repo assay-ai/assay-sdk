@@ -5,14 +5,33 @@
  *
  * `delegationOf(payer, delegate)`, `effectiveCapsOf(payer, delegate)` and `escrowOf(payer)`. Each
  * cap is the lower of the effective envelope and the current value: strictest wins.
+ *
+ * All reads run at one pinned block `B = min(heights) - 1`, so RPCs some blocks apart still agree;
+ * heights more than `MAX_BLOCK_SPREAD` apart refuse. A transient failure (an RPC error or timeout,
+ * or heights too far apart) runs the whole read again, at most `READ_ATTEMPTS` times in all, after
+ * `RETRY_DELAYS_MS`; no new attempt starts once `RETRY_WINDOW_MS` has passed. Each attempt pins its
+ * own block and needs every RPC again. A disagreement at the pinned block is never retried: two
+ * RPCs serving different bytes for the same block is a real conflict, and a later attempt that
+ * happens to agree would hide it. Another chain id, no block to pin and a malformed answer are
+ * final too. Failures are not cached.
  */
 import type { ChainState } from "./guard-types.js";
 import { getAddress, keccakUtf8, type Address } from "./hex.js";
 
 /** How long an agreed read stands (G4 accepts a read at most 600 s old). */
 export const CHAIN_CACHE_MS = 10 * 60 * 1000;
-/** The most two RPCs' latest heights may differ before the read refuses. */
-export const MAX_BLOCK_SPREAD = 5n;
+/**
+ * The most two RPCs' latest heights may differ before the read refuses. About 20 s on Robinhood
+ * Chain (~6 blocks/s), whose public RPCs are often 10 to 40 blocks apart. It only bounds how stale
+ * the pinned block can be; agreement comes from reading one explicit block.
+ */
+export const MAX_BLOCK_SPREAD = 120n;
+/** Attempts of the whole read, including the first, when an attempt fails transiently. */
+export const READ_ATTEMPTS = 3;
+/** The wait before the second and the third attempt. */
+export const RETRY_DELAYS_MS: readonly number[] = [300, 1000];
+/** No new attempt starts once this long has passed since the first one started. */
+export const RETRY_WINDOW_MS = 5_000;
 const MAX_RESPONSE_CHARS = 16 * 1024;
 const RPC_TIMEOUT_MS = 5_000;
 
@@ -27,7 +46,12 @@ export interface ChainReaderOptions {
   fetch: FetchFn;
   /** Milliseconds clock. */
   now: () => number;
+  /** The wait between attempts. Default `setTimeout`. */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/** An attempt that failed in a way another attempt may not (an RPC error, heights apart). */
+const TRANSIENT = Symbol("transient");
 
 export interface ChainNetwork {
   /** CAIP-2, `eip155:<id>`. */
@@ -74,12 +98,14 @@ const min = (a: bigint, b: bigint): bigint => (a < b ? a : b);
 export class ChainReader {
   readonly #fetch: FetchFn;
   readonly #now: () => number;
+  readonly #sleep: (ms: number) => Promise<void>;
   readonly #cache = new Map<string, { at: number; value: ChainState }>();
   #id = 1;
 
   constructor(options: ChainReaderOptions) {
     this.#fetch = options.fetch;
     this.#now = options.now;
+    this.#sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   }
 
   /** The agreed read for `payer` and `delegate` (checksummed), or `null` (fail closed). */
@@ -89,12 +115,7 @@ export class ChainReader {
     const t = this.#now();
     if (hit && t >= hit.at && t - hit.at < CHAIN_CACHE_MS) return hit.value;
     this.#cache.delete(key);
-    let value: ChainState | null;
-    try {
-      value = await this.#readOnce(net, payer, delegate, Math.floor(t / 1000));
-    } catch {
-      value = null;
-    }
+    const value = await this.#readWithRetry(net, payer, delegate, Math.floor(t / 1000));
     if (value !== null) this.#cache.set(key, { at: t, value });
     return value;
   }
@@ -104,7 +125,35 @@ export class ChainReader {
     this.#cache.delete(JSON.stringify([net, payer, delegate]));
   }
 
-  async #readOnce(net: ChainNetwork, payer: Address, delegate: Address, readAt: number): Promise<ChainState | null> {
+  /** The whole read, run again on a transient failure (see the module comment). */
+  async #readWithRetry(
+    net: ChainNetwork,
+    payer: Address,
+    delegate: Address,
+    readAt: number,
+  ): Promise<ChainState | null> {
+    const started = performance.now();
+    for (let attempt = 1; ; attempt++) {
+      let value: ChainState | null | typeof TRANSIENT;
+      try {
+        value = await this.#readOnce(net, payer, delegate, readAt);
+      } catch {
+        value = TRANSIENT;
+      }
+      if (value !== TRANSIENT) return value;
+      const delay = RETRY_DELAYS_MS[attempt - 1] ?? 0;
+      if (attempt >= READ_ATTEMPTS || performance.now() - started + delay > RETRY_WINDOW_MS) return null;
+      await this.#sleep(delay);
+    }
+  }
+
+  /** One attempt; an RPC that fails throws (transient). */
+  async #readOnce(
+    net: ChainNetwork,
+    payer: Address,
+    delegate: Address,
+    readAt: number,
+  ): Promise<ChainState | null | typeof TRANSIENT> {
     const rpcs = net.rpc;
     if (rpcs.length < 1 || new Set(rpcs).size !== rpcs.length || !rpcs.every(isUsableRpcUrl)) return null;
     const heads = await Promise.all(
@@ -120,7 +169,8 @@ export class ChainReader {
     const heights = heads.map((h) => h.height!);
     const low = heights.reduce((x, y) => (y < x ? y : x));
     const high = heights.reduce((x, y) => (y > x ? y : x));
-    if (high - low > MAX_BLOCK_SPREAD || low < 1n) return null;
+    if (high - low > MAX_BLOCK_SPREAD) return TRANSIENT;
+    if (low < 1n) return null;
     // One block behind the lowest head, so every RPC has it.
     const block = `0x${(low - 1n).toString(16)}`;
     const calls = [
@@ -137,6 +187,7 @@ export class ChainReader {
         ),
       ),
     );
+    // A disagreement at the pinned block is final (no retry).
     const first = answers[0]!;
     if (answers.some((a) => a.some((x, i) => x !== first[i]))) return null;
     const d = words(first[0]!, DELEGATION_WIDTHS);

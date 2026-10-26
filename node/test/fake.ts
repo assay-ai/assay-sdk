@@ -96,6 +96,8 @@ export const getToolAnswer = () => ({
 export function fakeClient(o: {
   mcp?: (params: Record<string, unknown>, req: Seen) => Answer | unknown;
   api?: Handler;
+  /** Answers a chain RPC request in place of the base context's view (`undefined`: the view). */
+  rpc?: Handler;
   options?: Partial<AssayOptions>;
   signer?: boolean;
   /** Pass the vectors' network table as `networks` (default), or use the built-in (empty) table. */
@@ -116,7 +118,7 @@ export function fakeClient(o: {
         status: a.status ?? 200,
         headers: { "content-type": "application/json", date, ...a.headers },
       });
-    if (url.startsWith("https://rpc")) return respond({ body: rpcAnswer(body) });
+    if (url.startsWith("https://rpc")) return respond(o.rpc?.(req) ?? { body: rpcAnswer(body) });
     if (url.startsWith(MCP)) {
       const out = o.mcp?.(body.params, req);
       if (out && typeof out === "object" && "body" in out) return respond(out as Answer);

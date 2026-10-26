@@ -61,6 +61,8 @@ export const MAX_TIMEOUT_SECONDS = 300;
 /** G12: the only resource a voucher may pay for is the forwarded tool's. */
 export const TOOL_RESOURCE_PREFIX = "/mcp/tools/";
 
+/** G4 with no agreed chain read: the RPCs may catch up in a moment. */
+const NO_CHAIN_READ_REASON = "the payment key's grant could not be read from the chain; try again in a minute";
 /** G4: the text the user sees when the server names a payer other than the recorded one. */
 export const PAYER_CHANGED_REASON = `payer changed; run ${RUN} enable-paid`;
 
@@ -245,7 +247,7 @@ function g4(ctx: GuardContext, c: Omit<Checked, "payer">, opts: GuardOptions): R
   }
   const chain = ctx.chain;
   if (!isPlainObject(chain)) {
-    return refuse("G4", "G4_NO_CHAIN_READ", "the payment key's grant could not be read from the chain");
+    return refuse("G4", "G4_NO_CHAIN_READ", NO_CHAIN_READ_REASON);
   }
   const validUntil = uint(chain.validUntil, MAX_UINT64, true);
   const chainPayer = localAccount(chain.payer, c.chainId);
@@ -258,7 +260,7 @@ function g4(ctx: GuardContext, c: Omit<Checked, "payer">, opts: GuardOptions): R
     readAt === null ||
     typeof chain.active !== "boolean"
   ) {
-    return refuse("G4", "G4_NO_CHAIN_READ", "the payment key's grant could not be read from the chain");
+    return refuse("G4", "G4_NO_CHAIN_READ", NO_CHAIN_READ_REASON);
   }
   if (readAt - c.now > CHAIN_READ_MAX_FUTURE_SECONDS || c.now - readAt > CHAIN_READ_MAX_AGE_SECONDS) {
     return refuse("G4", "G4_STALE_READ", "the chain read is too old");
