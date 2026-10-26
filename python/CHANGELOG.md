@@ -2,7 +2,7 @@
 
 All notable changes to `goassay` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
-## Unreleased
+## 0.1.3 - 2026-10-26
 
 ### Fixed
 

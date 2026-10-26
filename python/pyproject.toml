@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "goassay"
-version = "0.1.2"
+version = "0.1.3"
 description = "Call tools through Assay over MCP, with free and paid calls signed by your own key."
 readme = "README.md"
 license = "MIT"
