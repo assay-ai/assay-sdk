@@ -156,6 +156,27 @@ assay = Assay(
 )
 ```
 
+### Channel vouchers (preview)
+
+With `channels=`, the client signs one cumulative voucher per lane instead of one voucher per call, so many calls settle in one transaction. It is off by default, and used only on a network whose entry says `"channels": True` (none of the built-in ones yet) and only when the server offers a channel; otherwise every paid call is signed per call, as above.
+
+```python
+from goassay import Assay, FileChannelStore
+
+assay = Assay(
+    signer=signer,
+    networks={"eip155:<chainId>": {**my_network, "channels": True}},
+    channels=FileChannelStore("/path/to/assay-lanes.json"),
+)
+```
+
+- The next total on a lane comes only from the client's own record, which is written to the store before each signature and survives restarts. The server never names a total.
+- The spend limits count what each voucher adds (the price of the call), never the lane's total; `on_payment` sees the price as `amount` and the lane under `channel`.
+- Before a lane is continued after a restart (or after 10 minutes), its record is checked against the escrow's own state on chain; a record behind the chain is retired and a new lane opened.
+- `FileChannelStore` keeps one JSON file (mode 0600) and a lock file next to it: give each process its own file. `MemoryChannelStore()` keeps lanes for the life of the process.
+- `PaymentUnsettledLimitError` (`PAYMENT_UNSETTLED_LIMIT`): earlier payments are still being settled on chain; nothing was charged. Call again with the same idempotency key after `retry_after` seconds. Short waits are retried by the client itself.
+- **Channel debts.** If a channel payment could not be collected in time, Assay refuses paid calls (`PAYMENT_DEBT_OUTSTANDING`) until it is. Only the key that signed the lane can settle it, so the web portal cannot: `client.paid_calls.renew_channel_debts()` re-signs, on the lane each debt names, the total this client already signed there and that was served (never more, never a pair the server refused, never another lane; not counted again toward the limits) and returns one result per debt. It runs at most once a minute. A renew is not free of value: it lets Assay collect that total again once the first signature expired. `tools.call` does this by itself when a paid call is refused for a debt, then raises a `PaymentError` (`PAYMENT_DEBT_OUTSTANDING`) that says whether the payment is being collected (retryable), cannot be renewed by this client (settle it in the Assay app at `/funding` once offered there), or could not be renewed just now (retryable). Per-call debts are still signed by a person in the portal. `MemoryChannelStore()` forgets its lanes when the process ends, so a debt left behind can then no longer be renewed by the client: use a file store for anything long-running.
+
 ### Binding the key (once)
 
 ```python
@@ -221,6 +242,7 @@ A `PaymentRequiredError` carries the server's `hint` (what to do next, for examp
 | `rpc_urls` | the table's public RPC URLs |
 | `networks` | the built-in table; yours are merged over it |
 | `on_payment` | none |
+| `channels` | off (per-call vouchers only); a channel store turns on channel vouchers |
 | `http_client` | a new `httpx.Client` (`httpx.AsyncClient` for `AsyncAssay`) |
 | `timeout` | 120 s per attempt (httpx applies it to each of connect, read, write and pool) |
 | `max_retries` | 2, with backoff, honouring `Retry-After` |

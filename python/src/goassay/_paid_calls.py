@@ -15,6 +15,7 @@ from goassay._context import Context
 from goassay._eip155 import bind_evm_key
 from goassay._meta import fingerprint
 from goassay._ops import Flow
+from goassay._renew import DebtRenewal, renew_channel_debts
 from goassay.errors import AssayError, ConfigError, PaymentNetworkUnknownError, ServerError
 from goassay.signers import EvmSigner
 
@@ -189,6 +190,15 @@ def wait_until_active(c: Context, timeout: float) -> Flow[PaidCallsStatus]:
         yield from _ops.sleep(min(until - now, 5.0 if now - started < 120 else 15.0))
 
 
+def renew_debts(c: Context) -> Flow[list[DebtRenewal]]:
+    if _signer(c) is None:
+        raise ConfigError("renew_channel_debts() needs an eip155 signer")
+    out = yield from renew_channel_debts(c)
+    if out is None:
+        raise ConfigError("renew_channel_debts() needs the channels option (a lane store)")
+    return out
+
+
 class PaidCalls:
     def __init__(self, client: Assay) -> None:
         self._c = client
@@ -212,6 +222,25 @@ class PaidCalls:
         """Polls until a person approved the key, for up to ``timeout`` seconds."""
         return self._c._run(wait_until_active(self._c._ctx, timeout))
 
+    def renew_channel_debts(self) -> list[DebtRenewal]:
+        """Renews the payer's buyer debts on payment channels that this client signed.
+
+        A channel debt (a served call whose channel voucher could not be collected in time) can only
+        be settled by the key that signed the lane, so the web portal cannot do it. For each ``CHANNEL``
+        debt of ``GET /escrow/debts``, the debt's ``(cumulative, calls)`` pair is re-signed with fresh
+        times and sent to ``POST /escrow/debts/{intentId}/voucher``, only on the lane the debt names
+        (``channel.channelId``), only when that is this client's own lane (same network, escrow, payer
+        and key) and its record shows that exact pair signed and served, or with no answer. Never a
+        larger pair, a pair the server refused, or another lane; at most one signature per lane per
+        run. The renew re-authorises a total this client already signed on that lane; the limits do not
+        count it again. Paid calls resume once the renewed payment is held on chain (usually within
+        about 5 minutes). One ``DebtRenewal`` per debt. Throttled with the automatic run: at most one
+        renewing run a minute; within it the debts are only listed (nothing signed). Needs
+        ``channels=``, an eip155 signer and the ``payments`` scope. A ``MemoryChannelStore`` forgets its
+        lanes when the process ends: a debt left behind then can no longer be renewed (use a file
+        store). ``tools.call`` runs this by itself after a paid call refused for a debt."""
+        return self._c._run(renew_debts(self._c._ctx))
+
 
 class AsyncPaidCalls:
     def __init__(self, client: AsyncAssay) -> None:
@@ -225,3 +254,6 @@ class AsyncPaidCalls:
 
     async def wait_until_active(self, *, timeout: float = 900.0) -> PaidCallsStatus:
         return await self._c._run(wait_until_active(self._c._ctx, timeout))
+
+    async def renew_channel_debts(self) -> list[DebtRenewal]:
+        return await self._c._run(renew_debts(self._c._ctx))

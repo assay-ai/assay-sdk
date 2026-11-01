@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { namespaceOf } from "../core/caip.js";
 import {
   CALL_TOOL,
+  DEBT_CODE,
   ERROR_META,
   GET_TOOL,
   IDEMPOTENCY_META,
@@ -17,10 +18,17 @@ import {
   REPLAYED_META,
   SEARCH_TOOLS,
   structuredOf,
-  VOUCHER_META,
   type PriceQuote,
 } from "../core/meta.js";
 import type { Money } from "../core/voucher.js";
+import { channelDebtAnswer } from "../core/renew.js";
+import {
+  CHANNEL_CODES,
+  CHANNEL_REQUIRED_META,
+  channelFallbackOf,
+  laneOutcomeOf,
+  PAYMENT_SCHEMES_META,
+} from "../core/channel.js";
 import {
   AssayError,
   ConfigError,
@@ -245,14 +253,29 @@ export class Tools {
     }
   }
 
+  /** `assay/paymentSchemes` to offer: set only when a scheme can sign channel vouchers. */
+  #paymentSchemes(): readonly string[] | null {
+    for (const scheme of this.#c.schemes.values()) {
+      const offered = scheme.paymentSchemes();
+      if (offered !== null) return offered;
+    }
+    return null;
+  }
+
   async #call(name: string, args: Record<string, unknown>, key: string): Promise<ToolResult> {
-    const params = { name, arguments: args, _meta: { [IDEMPOTENCY_META]: key } };
+    const offered = this.#paymentSchemes();
+    const params = {
+      name,
+      arguments: args,
+      _meta: { [IDEMPOTENCY_META]: key, ...(offered !== null ? { [PAYMENT_SCHEMES_META]: [...offered] } : {}) },
+    };
     const calledAt = Math.floor(this.#c.now() / 1000);
     const first = await this.#send(params);
     const refusal = assayErrorOf(first);
     if (refusal === null) return toResult(first, key);
     const meta = first._meta as Record<string, unknown>;
     const requirement = meta[PAYMENT_REQUIRED_META];
+    if (refusal.code === DEBT_CODE) throw await this.#debtError(refusal, first);
     if (refusal.code !== PAYMENT_REQUIRED_CODE || requirement === undefined || requirement === null)
       throw toolError(refusal, first);
 
@@ -281,6 +304,9 @@ export class Tools {
       signer,
       idempotencyKey: key,
       quote: (t) => this.quoteFor(t),
+      ...(offered !== null && meta[CHANNEL_REQUIRED_META] !== undefined
+        ? { channelOffer: meta[CHANNEL_REQUIRED_META] }
+        : {}),
     };
     const prepared = await scheme.prepare(input);
     if (!prepared.ok) {
@@ -309,11 +335,65 @@ export class Tools {
       if (err instanceof AssayError) throw err;
       throw new PaymentError("SIGNER_FAILED", "the signer did not sign the voucher", { cause: err });
     }
-    const paid = await this.#send({ ...params, _meta: { ...params._meta, [VOUCHER_META]: envelope } });
+    let paid: Record<string, unknown>;
+    try {
+      paid = await this.#send({ ...params, _meta: { ...params._meta, [prepared.metaKey]: envelope } });
+    } catch (err) {
+      // No answer: what the server did with the voucher is unknown, so the lane is never reused (its
+      // pair stays renewable). A 4xx refusal of the request was not stored: the pair is dropped too.
+      const refused = err instanceof AssayError && err.status !== undefined && err.status >= 400 && err.status < 500;
+      await prepared.finish?.(refused ? "retire" : "unknown").catch(() => undefined);
+      throw err;
+    }
     const after = assayErrorOf(paid);
+    const code = after === null ? null : (after.code as string);
+    if (prepared.finish) {
+      await prepared.finish(laneOutcomeOf(code)).catch(() => undefined);
+      // One voucher per logical call: a channel refusal the next call recovers from by itself (a new
+      // lane after CHANNEL_ROTATE; per call while channels pause after CHANNEL_LIMIT and the like) is
+      // thrown as retryable, never signed again in this call.
+      if (code !== null && channelFallbackOf(code) !== "stop") {
+        scheme.channelRefused?.(code);
+        throw new PaymentError(
+          code,
+          "the payment channel could not take this payment; call again (nothing was charged)",
+          {
+            retryable: true,
+            ...(typeof after?.fixUrl === "string" ? { fixUrl: after.fixUrl } : {}),
+          },
+        );
+      }
+    }
     if (after === null) return toResult(paid, key);
-    await scheme.onRefused(after.code as string, input);
+    await scheme.onRefused(code!, input);
+    if (code === DEBT_CODE) throw await this.#debtError(after, paid);
     throw toolError(after, paid);
+  }
+
+  /**
+   * A paid call refused for a buyer debt (`PAYMENT_DEBT_OUTSTANDING`). When this client keeps
+   * channel lanes, the channel debts it signed are renewed once (`paidCalls.renewChannelDebts`,
+   * at most once a minute; within the minute the debts are only listed; the call is not sent
+   * again). The error then says what to do (`channelDebtAnswer`): being collected (retryable), a
+   * channel debt this client can no longer renew (settle in the app once offered), or only
+   * channel debts not renewed just now (retryable). With a per-call debt (a person signs it in
+   * the portal) it is the server's refusal.
+   */
+  async #debtError(e: Record<string, unknown>, result: Record<string, unknown>): Promise<AssayError> {
+    const refusal = toolError(e, result);
+    const signer = this.#c.signers.find((s) => s.namespace === "eip155");
+    const scheme = this.#c.schemes.get("eip155");
+    if (!signer || !scheme?.renewChannelDebts) return refusal;
+    let renewals;
+    try {
+      renewals = await scheme.renewChannelDebts(this.#c.api, signer);
+    } catch {
+      return refusal;
+    }
+    const details = { ...(refusal.details ?? {}), renewals: renewals ?? [] };
+    const answer = channelDebtAnswer(renewals, this.#c.webOrigin);
+    if (answer === null) return refusal;
+    return new PaymentError(DEBT_CODE, answer.text, { retryable: answer.retryable, details });
   }
 
   /** One `tools/call`; an `IDEMPOTENCY_IN_PROGRESS` answer waits and sends the same request again. */
@@ -322,7 +402,11 @@ export class Tools {
       const result = await this.#c.mcp.request("tools/call", params);
       const e = assayErrorOf(result);
       // The first attempt still runs, or a refusal-rate limit: wait and send the same bytes again.
-      if ((e?.code !== IN_PROGRESS_CODE && e?.code !== "RATE_LIMITED") || attempt >= this.#c.maxRetries) return result;
+      // A refusal only because earlier payments still settle (nothing charged, nothing stored) is
+      // sent again as is too, when the wait is short; a longer one is the caller's to wait for.
+      const again =
+        e?.code === IN_PROGRESS_CODE || e?.code === "RATE_LIMITED" || e?.code === CHANNEL_CODES.PAYMENT_UNSETTLED_LIMIT;
+      if (!again || attempt >= this.#c.maxRetries) return result;
       const wait =
         typeof e.retryAfterMs === "number"
           ? e.retryAfterMs

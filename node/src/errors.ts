@@ -15,6 +15,7 @@
  * ├─ PaymentError                     a PAYMENT_* refusal from the server
  * │   ├─ PaymentRequiredError         the tool is paid and no signer was given (.requirement)
  * │   ├─ PaymentSchemeUnsupportedError no signer for the requirement's network (.network)
+ * │   ├─ PaymentUnsettledLimitError   PAYMENT_UNSETTLED_LIMIT: earlier payments still settle; retry later (.retryAfterMs)
  * │   └─ PaymentRefusedError          refused locally before signing (.guard); nothing signed
  * │       └─ PaymentNetworkUnknownError the network is not in the SDK's network table (.network)
  * ├─ RateLimitError                   429, RATE_LIMITED, quota or velocity limits (.retryAfterMs)
@@ -179,6 +180,22 @@ export class PaymentNetworkUnknownError extends PaymentRefusedError {
   }
 }
 
+/**
+ * `PAYMENT_UNSETTLED_LIMIT`: the payment was refused only because earlier payments are still being
+ * settled on chain and fill the buyer's balance for now. Nothing was charged. Retryable: call
+ * again (with the same idempotency key) after `retryAfterMs`, about when the next settlement round
+ * has landed. The client already resent short waits itself.
+ */
+export class PaymentUnsettledLimitError extends PaymentError {
+  override name = "PaymentUnsettledLimitError";
+  /** How long to wait before calling again, when the server said. */
+  readonly retryAfterMs: number | undefined;
+  constructor(message: string, init: AssayErrorInit & { retryAfterMs?: number } = {}) {
+    super("PAYMENT_UNSETTLED_LIMIT", message, { ...init, retryable: true });
+    this.retryAfterMs = init.retryAfterMs;
+  }
+}
+
 export class RateLimitError extends AssayError {
   override name = "RateLimitError";
   /** How long to wait before trying again, when the server said. */
@@ -229,6 +246,7 @@ export function errorFromServer(code: string | undefined, message: string, f: Se
   if (c === "AUTH_HUMAN_SESSION_REQUIRED") return new HumanSessionRequiredError(message, f);
   if (c === "ACCOUNT_DELEGATE_ALREADY_BOUND") return new DelegateAlreadyBoundError(message, f);
   if (c === "ACCOUNT_DELEGATE_BIND_CONFLICT") return new DelegateBindConflictError(message, f);
+  if (c === "PAYMENT_UNSETTLED_LIMIT") return new PaymentUnsettledLimitError(message, f);
   if (RATE_LIMIT_CODES.has(c) || f.status === 429) return new RateLimitError(c, message, f);
   if (c.startsWith("AUTH_") || f.status === 401) return new AuthError(c, message, f);
   if (c.startsWith("PAYMENT_")) return new PaymentError(c, message, f);

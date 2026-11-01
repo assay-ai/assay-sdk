@@ -6,6 +6,7 @@ import inspect
 import os
 import platform
 import re
+import secrets
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any, TypeVar
@@ -23,6 +24,7 @@ from goassay._ops import CallOp, Flow, HttpOp, HttpResult, SleepOp
 from goassay._paid_calls import AsyncPaidCalls, PaidCalls
 from goassay._receipts import AsyncReceipts, Receipts
 from goassay._tools import AsyncTools, Tools
+from goassay.channels import ChannelStore
 from goassay.errors import ConfigError, NetworkError, TimeoutError
 from goassay.signers import EvmSigner, Signer
 
@@ -58,6 +60,7 @@ def _build_context(
     rpc_urls: Mapping[str, list[str]] | None,
     limits: Mapping[str, str] | None,
     on_payment: Callable[[dict[str, Any]], Any] | None,
+    channels: ChannelStore | None,
     timeout: float,
     max_retries: int,
     logger: Logger | None,
@@ -81,6 +84,10 @@ def _build_context(
         raise ConfigError("max_retries must be 0 to 10")
     if timeout <= 0:
         raise ConfigError("timeout must be positive")
+    if channels is not None and not (
+        callable(getattr(channels, "load", None)) and callable(getattr(channels, "save", None))
+    ):
+        raise ConfigError("channels must be a channel store, such as FileChannelStore(path)")
     from goassay import __version__
 
     http = HttpConfig(
@@ -111,6 +118,8 @@ def _build_context(
             chain=ChainReader(now),
             now=now,
             date_offset=lambda: http.date_offset,
+            channel_store=channels,
+            random_channel_id=(lambda: "0x" + secrets.token_hex(32)) if channels is not None else None,
         )
     return ctx
 
@@ -159,6 +168,12 @@ class Assay(_Base):
     rolling 24 hours. ``networks=`` configures payment networks (chainId, escrow, asset, decimals,
     rpcUrls), merged over the SDK's built-in table: a new network is added, and an entry for a
     built-in network replaces it whole. ``rpc_urls=`` sets your own RPC URLs for a network.
+
+    ``channels=`` turns on channel vouchers (``channel-v1``) with a store for the lanes, such as
+    ``FileChannelStore(path)`` (one process per file): one cumulative voucher per lane instead of one
+    per call, on networks whose entry says ``"channels": True`` (none of the built-in ones yet). Off
+    by default. The spend limits count only what each voucher adds, and a lane is checked against
+    the escrow's own record on chain before it is continued.
     """
 
     def __init__(
@@ -174,6 +189,7 @@ class Assay(_Base):
         rpc_urls: Mapping[str, list[str]] | None = None,
         limits: Mapping[str, str] | None = None,
         on_payment: Callable[[dict[str, Any]], bool | None] | None = None,
+        channels: ChannelStore | None = None,
         http_client: httpx.Client | None = None,
         timeout: float = 120.0,
         max_retries: int = 2,
@@ -192,6 +208,7 @@ class Assay(_Base):
             rpc_urls=rpc_urls,
             limits=limits,
             on_payment=on_payment,
+            channels=channels,
             timeout=timeout,
             max_retries=max_retries,
             logger=logger,
@@ -284,6 +301,7 @@ class AsyncAssay(_Base):
         rpc_urls: Mapping[str, list[str]] | None = None,
         limits: Mapping[str, str] | None = None,
         on_payment: Callable[[dict[str, Any]], bool | None | Awaitable[bool | None]] | None = None,
+        channels: ChannelStore | None = None,
         http_client: httpx.AsyncClient | None = None,
         timeout: float = 120.0,
         max_retries: int = 2,
@@ -302,6 +320,7 @@ class AsyncAssay(_Base):
             rpc_urls=rpc_urls,
             limits=limits,
             on_payment=on_payment,
+            channels=channels,
             timeout=timeout,
             max_retries=max_retries,
             logger=logger,

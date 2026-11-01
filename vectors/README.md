@@ -22,6 +22,7 @@ A new namespace (for example `solana/`) gets its own folder with the same kinds 
 | `binding.json` | section 5 | `DelegateBinding` challenges in the server's wire form: valid ones with the typed data to sign, its digest and signature, and invalid ones that must be refused naming a field |
 | `guards.json` | section 9 | The local guards G1 to G12 (G11 with a per-URL paid list only): a passing `base` context and cases that change it |
 | `seq.json` | section 9, G9 | `seq` bounds: `1 <= seq < 2^53` as a canonical decimal string |
+| `channel.json` | section 12 | `ChannelVoucher` typed data, hashes, signature, the channel key and the packed-slot decoding; a lane script (open, continue, re-sign after a not-stored refusal, rotation, chain check); the channel offer checks; the debt renew of a signed pair |
 
 ### vouchers.json
 
@@ -52,6 +53,13 @@ Case notes: `backend-cast-golden` reproduces the Assay backend's own voucher vec
 - Conventions: amounts, caps and spend are atomic units as decimal strings (6 decimals); local limits are dollars as decimal strings; times are Unix seconds on the local clock; `resource` length counts Unicode code points; addresses from the server are checksummed CAIP-10, addresses the client holds itself may be bare `0x` addresses in any case.
 - Codes are stable: never rename or reuse one.
 - **G11 needs a per-URL paid list.** Its cases (`guard: "G11"`, and the `canonicalUrl` / `paidUrls` fields of `base`) are for an app that keeps one, such as the local `assay-mcp` app. The `Assay` clients have no such list and ignore those fields. The Node tests run every case through `@goassay-ai/sdk/core` with `paidUrlPolicy` built from those fields, and every other case without it too; the Python tests skip the G11 cases, naming the reason.
+
+### channel.json
+
+- `cases[]`: a lane (`payer`, `provider`, `signer`, `channelId`) and a step (`cumulative`, `calls`, `issuedAt`, `expiresAt`) on a `network`, with the expected `wire` voucher, `typedData`, `domainSeparator`, `structHash`, `digest`, the test key's `signature`, the contract's channel `key`, and a packed `slot` with its decoded `settled` and `calls`. Computed with foundry from assay-evm's `Types.sol` (`CHANNEL_VOUCHER_TYPEHASH`) and `ChannelDoor` (`digestOf`, `keyOf`, `unpack`), and reproduced with foundry cast; `robinhood-mainnet-escrow` uses the production escrow's domain, whose separator equals the one in `vouchers.json`.
+- `lanes`: a script of `take` / `finish` / `check` / `state` steps on one pool, with the expected pair, increase and times after each `take` (see its `note`).
+- `offers`: a per-call `requirement`, a channel `offer` that passes, and `invalid` changes to the offer that must each be refused.
+- `renews`: a retired `lane` record with its `renewable` pairs, and `renewLane` cases (section 12.6; a case's `lane` changes the base lane, a `null` value deletes the field): `valid` pairs with the expected `wire` voucher, `typedData`, `digest`, the test key's `signature` and the lane's `renewedIssuedAt` (the same `ChannelVoucher` type and escrow domain as `cases`; digests and signatures reproduced with foundry cast), and `invalid` pairs (larger, other calls, never signed, zero, lane in flight, a pair the server refused, a record without `renewable` that is retired or re-armed, or an older pair of such a record) that must be refused.
 
 ## Placeholders and provenance
 

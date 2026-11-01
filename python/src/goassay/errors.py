@@ -152,6 +152,18 @@ class PaymentNetworkUnknownError(PaymentRefusedError):
         self.network = network
 
 
+class PaymentUnsettledLimitError(PaymentError):
+    """``PAYMENT_UNSETTLED_LIMIT``: refused only because earlier payments are still being settled on
+    chain and fill the buyer's balance for now. Nothing was charged. Retryable: call again (with the
+    same idempotency key) after ``retry_after`` seconds; the client already resent short waits itself."""
+
+    def __init__(self, message: str, *, retry_after: float | None = None, **kw: Any) -> None:
+        kw["retryable"] = True
+        super().__init__("PAYMENT_UNSETTLED_LIMIT", message, **kw)
+        self.retry_after = retry_after
+        """Seconds to wait before calling again, when the server said."""
+
+
 class RateLimitError(AssayError):
     def __init__(self, code: str, message: str, *, retry_after: float | None = None, **kw: Any) -> None:
         kw.setdefault("retryable", True)
@@ -201,6 +213,8 @@ def error_from_server(
         return DelegateAlreadyBoundError(message, **kw)
     if c == "ACCOUNT_DELEGATE_BIND_CONFLICT":
         return DelegateBindConflictError(message, **kw)
+    if c == "PAYMENT_UNSETTLED_LIMIT":
+        return PaymentUnsettledLimitError(message, retry_after=retry_after, **kw)
     if c in _RATE_LIMIT_CODES or status == 429:
         return RateLimitError(c, message, retry_after=retry_after, **kw)
     if c.startswith("AUTH_") or status == 401:

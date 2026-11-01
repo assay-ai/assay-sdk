@@ -54,6 +54,8 @@ def _selector(signature: str) -> str:
 _DELEGATION_OF = _selector("delegationOf(address,address)")
 _EFFECTIVE_CAPS_OF = _selector("effectiveCapsOf(address,address)")
 _ESCROW_OF = _selector("escrowOf(address)")
+_CHANNEL_BOOKS = _selector("channelBooks(bytes32,address)")
+_CHANNEL_BOOKS_WIDTHS = (256, 128, 128, 128)
 _DELEGATION_WIDTHS = (64, 64, 64, 64, 64, 32, 1)
 _CAPS_WIDTHS = (64, 64, 64, 64)
 _ESCROW_WIDTHS = (128, 64, 64, 64, 64, 64, 64, 64, 64, 128, 128, 128)
@@ -138,8 +140,60 @@ class ChainReader:
             yield from _ops.sleep(delay)
             attempt += 1
 
+    def read_channel(self, net: ChainNetwork, key: str, payer: str) -> Flow[int | None]:
+        """The packed state of one channel key (``channelBooks(key, payer)``), read like the grant:
+        one pinned block, every RPC, byte-identical answers, the same retries. ``None`` when there is
+        no agreed read (the caller then does not continue the lane). Not cached."""
+        if not re.fullmatch(r"0x[0-9a-fA-F]{64}", key):
+            return None
+        data = f"0x{_CHANNEL_BOOKS}{key[2:].lower()}{_word(payer)}"
+        started = self._monotonic()
+        attempt = 1
+        while True:
+            try:
+                value = yield from self._agreed_once(net, [data])
+            except Exception:
+                value = _TRANSIENT
+            if value is not _TRANSIENT:
+                w = _words(value[0], _CHANNEL_BOOKS_WIDTHS) if isinstance(value, list) else None
+                return w[0] if w is not None else None
+            delay = RETRY_DELAYS[attempt - 1] if attempt - 1 < len(RETRY_DELAYS) else 0.0
+            if attempt >= READ_ATTEMPTS or self._monotonic() - started + delay > RETRY_WINDOW:
+                return None
+            yield from _ops.sleep(delay)
+            attempt += 1
+
     def _read_once(self, net: ChainNetwork, payer: str, delegate: str, read_at: int) -> Flow[Any]:
         """One attempt: the read, ``None`` (final) or ``_TRANSIENT``; an RPC that fails raises."""
+        calls = [
+            f"0x{_DELEGATION_OF}{_word(payer)}{_word(delegate)}",
+            f"0x{_EFFECTIVE_CAPS_OF}{_word(payer)}{_word(delegate)}",
+            f"0x{_ESCROW_OF}{_word(payer)}",
+        ]
+        answers = yield from self._agreed_once(net, calls)
+        if not isinstance(answers, list):
+            return answers
+        d = _words(answers[0], _DELEGATION_WIDTHS)
+        caps = _words(answers[1], _CAPS_WIDTHS)
+        e = _words(answers[2], _ESCROW_WIDTHS)
+        if d is None or caps is None or e is None:
+            return None
+        valid_until = d[4]
+        return {
+            "payer": payer,
+            "delegate": delegate,
+            "readAt": read_at,
+            "active": valid_until != 0 and d[6] == 0,
+            "validUntil": str(valid_until),
+            "maxVoucherAmount": str(min(caps[0], e[3])),
+            "delegateMaxVoucherAmount": str(min(caps[2], d[0])),
+            "delegateMaxPerWindow": str(min(caps[3], d[1])),
+        }
+
+    def _agreed_once(self, net: ChainNetwork, calls: list[str]) -> Flow[Any]:
+        """``eth_call`` of each of ``calls`` on the escrow at one pinned block on every RPC: the
+        answers (lower case) when every RPC returned the same bytes, ``None`` (final) or ``_TRANSIENT``;
+        an RPC that fails raises."""
         rpcs = net.rpc
         if not rpcs or len(set(rpcs)) != len(rpcs) or not all(is_usable_rpc_url(u) for u in rpcs):
             return None
@@ -156,11 +210,6 @@ class ChainReader:
         if low < 1:
             return None
         block = hex(low - 1)
-        calls = [
-            f"0x{_DELEGATION_OF}{_word(payer)}{_word(delegate)}",
-            f"0x{_EFFECTIVE_CAPS_OF}{_word(payer)}{_word(delegate)}",
-            f"0x{_ESCROW_OF}{_word(payer)}",
-        ]
         answers = []
         for url in rpcs:
             row = []
@@ -171,21 +220,7 @@ class ChainReader:
         # A disagreement at the pinned block is final (no retry).
         if any(a != answers[0] for a in answers):
             return None
-        d = _words(answers[0][0], _DELEGATION_WIDTHS)
-        caps = _words(answers[0][1], _CAPS_WIDTHS)
-        e = _words(answers[0][2], _ESCROW_WIDTHS)
-        if d is None or caps is None or e is None:
-            return None
-        valid_until = d[4]
-        return {
-            "payer": payer,
-            "delegate": delegate,
-            "readAt": read_at,
-            "active": valid_until != 0 and d[6] == 0,
-            "validUntil": str(valid_until),
-            "maxVoucherAmount": str(min(caps[0], e[3])),
-            "delegateMaxVoucherAmount": str(min(caps[2], d[0])),
-        }
+        return answers[0]
 
     def _call(self, url: str, method: str, params: list[Any]) -> Flow[Any]:
         rid = next(_ids)

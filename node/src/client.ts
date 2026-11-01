@@ -1,4 +1,6 @@
+import { randomBytes } from "node:crypto";
 import { inspect } from "node:util";
+import type { ChannelStore } from "./channels.js";
 import { ChainReader } from "./core/chain.js";
 import { ConfigError } from "./errors.js";
 import { Http, silentLogger, type FetchLike, type Logger } from "./http.js";
@@ -55,6 +57,15 @@ export interface AssayOptions {
   limits?: Limits;
   /** Called before each voucher is signed, after every local check passed. Return `false` to refuse. */
   onPayment?: OnPayment;
+  /**
+   * Channel vouchers (`channel-v1`): one cumulative voucher per lane instead of one voucher per
+   * call, on networks whose entry says `channels: true` (none of the built-in ones yet). Off by
+   * default: without this option every paid call is signed per call, as before. `store` keeps
+   * the lanes between runs (`fileChannelStore(path)`; one process per file). The spend limits
+   * count only what each voucher adds, and a lane is checked against the escrow's own record on
+   * chain before it is continued.
+   */
+  channels?: { store: ChannelStore };
   /** Default: the global `fetch`. */
   fetch?: FetchLike;
   /** Per attempt, in milliseconds. Default 120 000. */
@@ -149,6 +160,13 @@ export class Assay {
   }
 }
 
+function channelStore(c: { store: ChannelStore }): ChannelStore {
+  const store = c?.store;
+  if (typeof store?.load !== "function" || typeof store?.save !== "function")
+    throw new ConfigError("channels.store must be a channel store, such as fileChannelStore(path)");
+  return store;
+}
+
 function buildContext(options: AssayOptions): ClientContext {
   const apiKey = (options.apiKey ?? process.env.ASSAY_API_KEY ?? "").trim();
   if (apiKey === "") throw new ConfigError("an API key is required: pass apiKey or set ASSAY_API_KEY");
@@ -196,6 +214,14 @@ function buildContext(options: AssayOptions): ClientContext {
         chain: new ChainReader({ fetch: fetchFn, now, sleep }),
         now,
         dateOffset: () => http.dateOffset,
+        ...(options.channels !== undefined
+          ? {
+              channels: {
+                store: channelStore(options.channels),
+                randomChannelId: () => `0x${randomBytes(32).toString("hex")}` as const,
+              },
+            }
+          : {}),
       }),
     );
   }

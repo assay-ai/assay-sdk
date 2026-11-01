@@ -12,7 +12,9 @@ from goassay._client import (  # noqa: E402
 )
 from goassay._networks import BUILT_IN_NETWORKS  # noqa: E402
 from goassay._paid_calls import PaidCallsStatus  # noqa: E402
+from goassay._renew import DebtRenewal  # noqa: E402
 from goassay._tools import SearchResult, ToolList, ToolResult  # noqa: E402
+from goassay.channels import ChannelStore, FileChannelStore, MemoryChannelStore  # noqa: E402
 from goassay.errors import (  # noqa: E402
     AssayError,
     AuthError,
@@ -27,6 +29,7 @@ from goassay.errors import (  # noqa: E402
     PaymentRefusedError,
     PaymentRequiredError,
     PaymentSchemeUnsupportedError,
+    PaymentUnsettledLimitError,
     RateLimitError,
     ScopeMissingError,
     ServerError,
@@ -43,19 +46,24 @@ __all__ = [
     "AssayError",
     "AsyncAssay",
     "AuthError",
+    "ChannelStore",
     "ConfigError",
     "DelegateAlreadyBoundError",
     "DelegateBindConflictError",
     "EvmSigner",
+    "FileChannelStore",
     "HumanSessionRequiredError",
     "McpUrlNotFoundError",
+    "MemoryChannelStore",
     "NetworkError",
     "PaidCallsStatus",
+    "DebtRenewal",
     "PaymentError",
     "PaymentNetworkUnknownError",
     "PaymentRefusedError",
     "PaymentRequiredError",
     "PaymentSchemeUnsupportedError",
+    "PaymentUnsettledLimitError",
     "RateLimitError",
     "ScopeMissingError",
     "SearchResult",

@@ -1,5 +1,7 @@
 import type { PriceQuote } from "../core/meta.js";
 import type { Money } from "../core/voucher.js";
+import type { DebtRenewal } from "../core/renew.js";
+import type { RestClient } from "../rest.js";
 import type { Signer } from "../signer.js";
 
 /** What a caller's `onPayment` hook sees before anything is signed. */
@@ -16,6 +18,20 @@ export interface PaymentDetails {
   payer: string;
   /** The idempotency key of this logical call. */
   idempotencyKey: string;
+  /**
+   * Set when the call is paid on a channel lane. `amount` above is still the price of this one
+   * call (the increase the voucher adds), never the lane's cumulative total.
+   */
+  channel?: {
+    /** The lane, 32 bytes of hex. */
+    channelId: string;
+    /** The lane's total after this call, in atomic units: what the voucher signs. */
+    cumulative: string;
+    /** The lane's call counter after this call. */
+    calls: number;
+    /** What this voucher adds, in atomic units: the price, or "0" when it signs the same total again. */
+    increase: string;
+  };
 }
 
 export interface PrepareInput {
@@ -29,7 +45,12 @@ export interface PrepareInput {
   idempotencyKey: string;
   /** The quote for a tool (G3) on the calling client's URL: cached from list/search/get, or a fresh `get_tool`. */
   quote: (tool: string) => Promise<PriceQuote | null>;
+  /** `_meta["assay/channelRequired"]` of the same answer, when there was one. Untrusted. */
+  channelOffer?: unknown;
 }
+
+/** What the caller reports about a channel voucher once the server answered (or did not). */
+export type ChannelOutcome = "served" | "reuse" | "retire" | "unknown";
 
 export type Prepared =
   | {
@@ -39,6 +60,10 @@ export type Prepared =
       sign(): Promise<Record<string, unknown>>;
       /** Gives back the spend reserved for this voucher, when it is not signed after all. */
       release(): void;
+      /** The request `_meta` key the envelope goes under (`assay/voucher` or `assay/channelVoucher`). */
+      metaKey: string;
+      /** Set on a channel voucher: report the server's answer, so the lane is freed or retired. */
+      finish?: (outcome: ChannelOutcome) => Promise<void>;
     }
   | { ok: false; guard: string; code: string; reason: string };
 
@@ -52,4 +77,17 @@ export interface PaymentScheme {
   prepare(input: PrepareInput): Promise<Prepared>;
   /** Told about a server refusal of a signed voucher (for example a revoked key). */
   onRefused(code: string, input: PrepareInput): Promise<void>;
+  /** `_meta["assay/paymentSchemes"]` to send, or `null` to send none (per-call vouchers only). */
+  paymentSchemes(): readonly string[] | null;
+  /**
+   * The server refused a channel voucher with `CHANNEL_ROTATE`, `CHANNEL_LIMIT`,
+   * `CHANNEL_SIGNER_EXPIRING` or `CHANNEL_NOT_OFFERED`. The last three stop channel offers for an
+   * hour; so do `CHANNEL_ROTATE_PAUSE_COUNT` rotations within an hour.
+   */
+  channelRefused?(code: string): void;
+  /**
+   * Renews the payer's channel debts this client signed (throttled: once a minute renews, the
+   * rest only lists); `null` when it keeps no lanes. See `Eip155Scheme.renewChannelDebts`.
+   */
+  renewChannelDebts?(api: RestClient, signer: Signer): Promise<DebtRenewal[] | null>;
 }

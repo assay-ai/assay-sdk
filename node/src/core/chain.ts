@@ -39,6 +39,7 @@ const selector = (signature: string): string => keccakUtf8(signature).slice(2, 1
 const DELEGATION_OF = selector("delegationOf(address,address)");
 const EFFECTIVE_CAPS_OF = selector("effectiveCapsOf(address,address)");
 const ESCROW_OF = selector("escrowOf(address)");
+const CHANNEL_BOOKS = selector("channelBooks(bytes32,address)");
 
 export type FetchFn = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -92,6 +93,13 @@ function words(data: string, widths: readonly number[]): bigint[] | null {
 const DELEGATION_WIDTHS = [64, 64, 64, 64, 64, 32, 1];
 const CAPS_WIDTHS = [64, 64, 64, 64];
 const ESCROW_WIDTHS = [128, 64, 64, 64, 64, 64, 64, 64, 64, 128, 128, 128];
+const CHANNEL_BOOKS_WIDTHS = [256, 128, 128, 128];
+
+/** A channel's packed slot from `channelBooks(key, payer)`, as agreed by every RPC. */
+export interface ChannelChainState {
+  /** The packed `channelState[key]` word (decode with `unpackChannelState`). */
+  state: bigint;
+}
 
 const min = (a: bigint, b: bigint): bigint => (a < b ? a : b);
 
@@ -147,6 +155,32 @@ export class ChainReader {
     }
   }
 
+  /**
+   * The packed state of one channel key (`channelBooks(key, payer)`), read like the grant: one
+   * pinned block, every RPC, byte-identical answers, the same retries. `null` when there is no
+   * agreed read (fail closed: the caller does not continue the lane). Not cached.
+   */
+  async readChannel(net: ChainNetwork, key: string, payer: Address): Promise<ChannelChainState | null> {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(key)) return null;
+    const data = `0x${CHANNEL_BOOKS}${key.slice(2).toLowerCase()}${word(payer)}`;
+    const started = performance.now();
+    for (let attempt = 1; ; attempt++) {
+      let value: string[] | null | typeof TRANSIENT;
+      try {
+        value = await this.#agreedOnce(net, [data]);
+      } catch {
+        value = TRANSIENT;
+      }
+      if (value !== TRANSIENT) {
+        const w = value === null ? null : words(value[0]!, CHANNEL_BOOKS_WIDTHS);
+        return w ? { state: w[0]! } : null;
+      }
+      const delay = RETRY_DELAYS_MS[attempt - 1] ?? 0;
+      if (attempt >= READ_ATTEMPTS || performance.now() - started + delay > RETRY_WINDOW_MS) return null;
+      await this.#sleep(delay);
+    }
+  }
+
   /** One attempt; an RPC that fails throws (transient). */
   async #readOnce(
     net: ChainNetwork,
@@ -154,6 +188,36 @@ export class ChainReader {
     delegate: Address,
     readAt: number,
   ): Promise<ChainState | null | typeof TRANSIENT> {
+    const calls = [
+      `0x${DELEGATION_OF}${word(payer)}${word(delegate)}`,
+      `0x${EFFECTIVE_CAPS_OF}${word(payer)}${word(delegate)}`,
+      `0x${ESCROW_OF}${word(payer)}`,
+    ];
+    const first = await this.#agreedOnce(net, calls);
+    if (first === null || first === TRANSIENT) return first;
+    const d = words(first[0]!, DELEGATION_WIDTHS);
+    const caps = words(first[1]!, CAPS_WIDTHS);
+    const e = words(first[2]!, ESCROW_WIDTHS);
+    if (!d || !caps || !e) return null;
+    const [dMax, dWindow, , , validUntil, , revoked] = d as [bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+    return {
+      payer: getAddress(payer),
+      delegate: getAddress(delegate),
+      readAt,
+      active: validUntil !== 0n && revoked === 0n,
+      validUntil: validUntil.toString(),
+      maxVoucherAmount: min(caps[0]!, e[3]!).toString(),
+      delegateMaxVoucherAmount: min(caps[2]!, dMax).toString(),
+      delegateMaxPerWindow: min(caps[3]!, dWindow).toString(),
+    };
+  }
+
+  /**
+   * `eth_call` of each of `calls` on the escrow at one pinned block on every RPC: the answers
+   * (lower case) when every RPC returned the same bytes, `null` for a final failure, `TRANSIENT`
+   * for one another attempt may not hit. An RPC that fails throws (transient).
+   */
+  async #agreedOnce(net: ChainNetwork, calls: readonly string[]): Promise<string[] | null | typeof TRANSIENT> {
     const rpcs = net.rpc;
     if (rpcs.length < 1 || new Set(rpcs).size !== rpcs.length || !rpcs.every(isUsableRpcUrl)) return null;
     const heads = await Promise.all(
@@ -173,11 +237,6 @@ export class ChainReader {
     if (low < 1n) return null;
     // One block behind the lowest head, so every RPC has it.
     const block = `0x${(low - 1n).toString(16)}`;
-    const calls = [
-      `0x${DELEGATION_OF}${word(payer)}${word(delegate)}`,
-      `0x${EFFECTIVE_CAPS_OF}${word(payer)}${word(delegate)}`,
-      `0x${ESCROW_OF}${word(payer)}`,
-    ];
     const answers = await Promise.all(
       rpcs.map((url) =>
         Promise.all(
@@ -190,20 +249,7 @@ export class ChainReader {
     // A disagreement at the pinned block is final (no retry).
     const first = answers[0]!;
     if (answers.some((a) => a.some((x, i) => x !== first[i]))) return null;
-    const d = words(first[0]!, DELEGATION_WIDTHS);
-    const caps = words(first[1]!, CAPS_WIDTHS);
-    const e = words(first[2]!, ESCROW_WIDTHS);
-    if (!d || !caps || !e) return null;
-    const [dMax, , , , validUntil, , revoked] = d as [bigint, bigint, bigint, bigint, bigint, bigint, bigint];
-    return {
-      payer: getAddress(payer),
-      delegate: getAddress(delegate),
-      readAt,
-      active: validUntil !== 0n && revoked === 0n,
-      validUntil: validUntil.toString(),
-      maxVoucherAmount: min(caps[0]!, e[3]!).toString(),
-      delegateMaxVoucherAmount: min(caps[2]!, dMax).toString(),
-    };
+    return first;
   }
 
   async #call(url: string, method: string, params: unknown[]): Promise<unknown> {

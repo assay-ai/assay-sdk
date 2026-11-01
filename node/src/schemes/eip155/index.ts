@@ -9,12 +9,36 @@ import { correctedNow } from "../../core/clock.js";
 import { SignerRefusal } from "../../core/errors.js";
 import type { GuardContext, GuardOptions, GuardResult, SignedVoucher } from "../../core/guard-types.js";
 import { checkAll, usdToAtomic } from "../../core/guards.js";
-import { getAddress, type Address } from "../../core/hex.js";
-import { isObject, voucherEnvelope } from "../../core/meta.js";
+import { getAddress, type Address, type Hex } from "../../core/hex.js";
+import { isObject, VOUCHER_META, voucherEnvelope } from "../../core/meta.js";
+import {
+  advanceLane,
+  buildChannelVoucher,
+  CHANNEL_CODES,
+  CHANNEL_SCHEME,
+  CHANNEL_VOUCHER_META,
+  channelKey,
+  channelVoucherEnvelope,
+  checkChannelOffer,
+  finishLane,
+  forgetChecks,
+  laneCoversChain,
+  parseBook,
+  pickLane,
+  recordCheck,
+  unpackChannelState,
+  type ChannelBook,
+  type ChannelLane,
+  type ChannelNetwork,
+  type LanePool,
+} from "../../core/channel.js";
+import type { ChannelStore } from "../../channels.js";
+import { renewChannelDebts, type DebtRenewal, type RenewAnswer } from "../../core/renew.js";
+import type { RestClient } from "../../rest.js";
 import { buildVoucher, type VoucherRequirement, type VoucherTypedData, type WireVoucher } from "../../core/voucher.js";
-import { ConfigError } from "../../errors.js";
+import { AssayError, ConfigError } from "../../errors.js";
 import type { EvmSigner } from "../../signer.js";
-import type { PaymentScheme, Prepared, PrepareInput } from "../types.js";
+import type { ChannelOutcome, PaymentScheme, Prepared, PrepareInput } from "../types.js";
 
 /** One EVM network: built into the SDK, or configured by the caller. */
 export interface Eip155Network {
@@ -27,6 +51,11 @@ export interface Eip155Network {
   decimals: number;
   /** JSON-RPC URLs for the chain reads of G4/G6. Every one must agree. */
   rpcUrls: string[];
+  /**
+   * The escrow has the channel door (`channel-v1`). Only then does the client offer channel
+   * vouchers on this network, and only when it was given a channel store. Default `false`.
+   */
+  channels?: boolean;
 }
 
 export interface NetworkEntry {
@@ -37,6 +66,8 @@ export interface NetworkEntry {
   asset: string;
   decimals: number;
   rpc: readonly string[];
+  /** The escrow has the channel door. Absent is `false`. */
+  channels?: boolean;
 }
 
 /** Local limits in dollars, as decimal strings (G7). */
@@ -63,6 +94,8 @@ function networkEntry(id: string, n: Eip155Network, fail: (message: string) => E
   if (!Array.isArray(rpc) || rpc.length === 0 || !rpc.every((u) => typeof u === "string" && isUsableRpcUrl(u))) {
     throw fail(`networks.${id}.rpcUrls must list at least one https RPC URL`);
   }
+  if (n.channels !== undefined && typeof n.channels !== "boolean")
+    throw fail(`networks.${id}.channels must be a boolean`);
   return Object.freeze({
     id,
     chainId,
@@ -71,6 +104,7 @@ function networkEntry(id: string, n: Eip155Network, fail: (message: string) => E
     asset: n.asset,
     decimals: n.decimals,
     rpc: Object.freeze([...rpc]),
+    channels: n.channels === true,
   });
 }
 
@@ -204,6 +238,12 @@ export function guardAndBuild(
 }
 
 const SPEND_WINDOW_SECONDS = 86_400;
+/** How long channels are not offered after `CHANNEL_LIMIT`, `CHANNEL_SIGNER_EXPIRING`, `CHANNEL_NOT_OFFERED` or a burst of rotations. */
+export const CHANNEL_PAUSE_MS = 60 * 60 * 1000;
+/** This many `CHANNEL_ROTATE` within `CHANNEL_PAUSE_MS` pause channels as well. */
+export const CHANNEL_ROTATE_PAUSE_COUNT = 5;
+/** After a paid call refused for a debt, channel debts are renewed at most this often by themselves. */
+export const AUTO_RENEW_INTERVAL_MS = 60_000;
 /**
  * Vouchers signed in this process, by key: every client using one key shares one 24 h cap. One
  * array per key, only ever changed in place, so a reservation is always released from the list
@@ -237,6 +277,11 @@ export interface Eip155SchemeOptions {
   now: () => number;
   /** Server minus local clock, seconds (spec section 7). */
   dateOffset: () => number;
+  /**
+   * Channel vouchers: where the lanes are kept. Without it the scheme signs per-call vouchers
+   * only and never offers `channel-v1`.
+   */
+  channels?: { store: ChannelStore; randomChannelId: () => Hex };
 }
 
 function accountOn(value: unknown, chainId: number): Address | null {
@@ -244,12 +289,238 @@ function accountOn(value: unknown, chainId: number): Address | null {
   return parsed && parsed.chainId === chainId ? parsed.address : null;
 }
 
+/** What one channel voucher needs once its lane step is persisted. */
+interface ChannelPlan {
+  typedData: ReturnType<typeof buildChannelVoucher>["typedData"];
+  wire: ReturnType<typeof buildChannelVoucher>["wire"];
+  channelId: string;
+  increase: bigint;
+  cumulative: bigint;
+  calls: number;
+}
+
 export class Eip155Scheme implements PaymentScheme {
   readonly namespace = "eip155";
   /** The payer of the first voucher this client signed (G4): a different one later is refused. */
   #recordedPayer: string | null = null;
+  /** Serialises every read-modify-write of the channel store in this process. */
+  #lanes: Promise<unknown> = Promise.resolve();
+  /** Whether this process has read the stored record yet (its chain checks are not this process's). */
+  #loaded = false;
 
   constructor(private readonly o: Eip155SchemeOptions) {}
+
+  /** Until when (ms) channels are not offered, after a refusal a channel cannot fix soon. */
+  #pausedUntil = 0;
+
+  /** When the server rotated a lane, ms; a burst of rotations pauses channels too. */
+  #rotations: number[] = [];
+
+  /** Before when (ms) a refused paid call does not renew channel debts again by itself. */
+  #autoRenewNotBefore = 0;
+  /** The results of the last renewing run, by intent (what a throttled run reports). */
+  #lastRenewals = new Map<string, DebtRenewal>();
+
+  /** Whether this client keeps channel lanes (and so can renew a channel debt). */
+  get keepsLanes(): boolean {
+    return this.o.channels !== undefined;
+  }
+
+  /**
+   * Renews the payer's channel debts this client signed (see `core/renew.ts`): the renewable pair
+   * of the lane each debt names, fresh times, one `POST /escrow/debts/{intentId}/voucher` per debt,
+   * at most one signature per lane. Not counted as a new spend; never above the lane's signed top,
+   * never a pair the server refused. At most one renewing run per {@link AUTO_RENEW_INTERVAL_MS}
+   * (manual or after a refused call): within it the debts are only listed, nothing is signed, and
+   * an open channel debt comes back as the last run left it (`renewed` as `pending`, `no_lane`,
+   * `not_signed_here`) or `rate_limited`. `null` without a lane store.
+   */
+  async renewChannelDebts(api: RestClient, signer: EvmSigner): Promise<DebtRenewal[] | null> {
+    if (this.o.channels === undefined) return null;
+    const now = this.o.now();
+    const throttled = now < this.#autoRenewNotBefore;
+    const options = throttled
+      ? { renew: false, retryAfterMs: this.#autoRenewNotBefore - now, previous: this.#lastRenewals }
+      : {};
+    if (!throttled) this.#autoRenewNotBefore = now + AUTO_RENEW_INTERVAL_MS;
+    const localKey = getAddress(signer.address);
+    const out = await renewChannelDebts(
+      {
+        listDebts: async () => (await api.get("/escrow/debts")).data,
+        withBook: (fn) => this.#withBook(async (book) => fn(book)),
+        network: (id) => {
+          const e = this.o.networks.get(id);
+          return e ? { id: e.id, chainId: e.chainId, escrow: e.escrow, asset: e.asset, decimals: e.decimals } : null;
+        },
+        signer: localKey,
+        sign: async (typedData) => signer.signTypedData(typedData as never),
+        post: async (intentId, body): Promise<RenewAnswer> => {
+          try {
+            await api.post(`/escrow/debts/${encodeURIComponent(intentId)}/voucher`, body);
+            return { ok: true };
+          } catch (err) {
+            // No answer at all: what the server did is unknown (the renew moves nothing either way).
+            if (!(err instanceof AssayError) || err.status === undefined) throw err;
+            const wait = (err as { retryAfterMs?: unknown }).retryAfterMs;
+            const secs = err.details?.retryAfter;
+            const retryAfterMs = typeof wait === "number" ? wait : typeof secs === "number" ? secs * 1000 : undefined;
+            return { ok: false, code: err.code, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) };
+          }
+        },
+        nowSeconds: () => Math.floor(this.o.now() / 1000),
+        issuedAt: (nowSeconds) => correctedNow(nowSeconds, this.o.dateOffset()),
+      },
+      options,
+    );
+    if (!throttled) this.#lastRenewals = new Map(out.map((r) => [r.intentId, r]));
+    return out;
+  }
+
+  channelRefused(code: string): void {
+    const now = this.o.now();
+    if (code === CHANNEL_CODES.CHANNEL_ROTATE) {
+      this.#rotations = [...this.#rotations.filter((t) => now - t < CHANNEL_PAUSE_MS), now];
+      if (this.#rotations.length < CHANNEL_ROTATE_PAUSE_COUNT) return;
+      this.#rotations = [];
+    }
+    this.#pausedUntil = now + CHANNEL_PAUSE_MS;
+  }
+
+  paymentSchemes(): readonly string[] | null {
+    if (this.o.channels === undefined || this.o.now() < this.#pausedUntil) return null;
+    return [...this.o.networks.values()].some((n) => n.channels === true) ? [CHANNEL_SCHEME, "voucher"] : null;
+  }
+
+  /** Runs `fn` on the channel book with this process's lane lock held; saves what it returns. */
+  #withBook<T>(fn: (book: ChannelBook) => Promise<{ book: ChannelBook | null; value: T }>): Promise<T> {
+    const store = this.o.channels!.store;
+    const body = async () => {
+      let book = parseBook(await store.load());
+      // Until this process has written the record, its chain checks were made by someone else.
+      if (!this.#loaded) book = forgetChecks(book);
+      const out = await fn(book);
+      if (out.book !== null) {
+        await store.save(out.book);
+        this.#loaded = true;
+      }
+      return out.value;
+    };
+    // The store's own queue when it has one (shared by every client on the record), else this client's.
+    const run = store.exclusive ? this.#lanes.then(() => store.exclusive!(body)) : this.#lanes.then(body);
+    this.#lanes = run.catch(() => undefined);
+    return run;
+  }
+
+  /**
+   * The channel step for a requirement the guards passed: the offer checked against it and the
+   * client's own entry, a free lane (checked against the chain when its record is not fresh), the
+   * next pair from the lane's record only, persisted before anything is signed. `null` when the
+   * call should be paid per call instead (no channel, no lane, no agreed chain read, a store that
+   * cannot be read or written).
+   */
+  async #planChannel(
+    input: PrepareInput,
+    entry: NetworkEntry,
+    req: VoucherRequirement,
+    localKey: Address,
+    rotateAt: bigint,
+  ): Promise<ChannelPlan | null> {
+    const channels = this.o.channels;
+    if (
+      channels === undefined ||
+      entry.channels !== true ||
+      input.channelOffer === undefined ||
+      input.channelOffer === null
+    )
+      return null;
+    const net: ChannelNetwork = {
+      id: entry.id,
+      chainId: entry.chainId,
+      escrow: entry.escrow,
+      asset: entry.asset,
+      decimals: entry.decimals,
+    };
+    const checked = checkChannelOffer(input.channelOffer, req as unknown as Record<string, unknown>, net);
+    if (!checked.ok) return null;
+    const offer = checked.offer;
+    const pool: LanePool = {
+      network: entry.id,
+      escrow: entry.escrow,
+      payer: getAddress(parseCaip10(req.payer)!.address),
+      signer: localKey,
+      provider: getAddress(parseCaip10(req.provider)!.address),
+    };
+    type Pick =
+      { kind: "plan"; plan: ChannelPlan } | { kind: "none" } | { kind: "check"; lane: ChannelLane; nowSeconds: number };
+    try {
+      // At most one chain check per lane of the pool, then a new lane.
+      for (let round = 0; round < 10; round++) {
+        const picked = await this.#withBook<Pick>(async (book) => {
+          const nowSeconds = Math.floor(this.o.now() / 1000);
+          const pick = pickLane(book, pool, offer.price, {
+            maxLanes: offer.maxLanes,
+            rotateAt,
+            nowSeconds,
+            newChannelId: channels.randomChannelId,
+          });
+          if (pick.kind === "none") return { book: pick.book, value: { kind: "none" } };
+          const lane = pick.lane;
+          if (pick.needsCheck) return { book: pick.book, value: { kind: "check", lane, nowSeconds } };
+          const issuedAt = correctedNow(nowSeconds, this.o.dateOffset());
+          const step = advanceLane(pick.book, lane.channelId, offer.price, issuedAt, offer.lifetimeSeconds, nowSeconds);
+          const built = buildChannelVoucher(lane, step, net);
+          // Persisted (write-ahead) by #withBook before the plan is returned and signed.
+          return {
+            book: step.book,
+            value: {
+              kind: "plan",
+              plan: {
+                ...built,
+                channelId: step.channelId,
+                increase: step.increase,
+                cumulative: step.cumulative,
+                calls: step.calls,
+              },
+            },
+          };
+        });
+        if (picked.kind === "none") return null;
+        if (picked.kind === "plan") return picked.plan;
+        // The chain check, outside the lane lock (a slow RPC must not stall every paid call); the
+        // lane is re-read under the lock before the result is recorded.
+        const { lane, nowSeconds } = picked;
+        const key = channelKey(lane.payer, lane.signer, lane.provider, lane.channelId);
+        const read = await this.o.chain.readChannel(entry, key, lane.payer);
+        // No agreed read: the record cannot be confirmed now; pay per call this time.
+        if (read === null) return null;
+        const chainState = unpackChannelState(read.state);
+        await this.#withBook(async (book) => {
+          const current = book.lanes.find((l) => l.channelId === lane.channelId);
+          // Compare-and-set: the result is recorded only for the lane as it was read.
+          if (
+            current === undefined ||
+            current.retired ||
+            current.inFlightSince !== null ||
+            current.maxSigned !== lane.maxSigned ||
+            current.callsSigned !== lane.callsSigned
+          )
+            return { book: null, value: undefined };
+          return {
+            book: recordCheck(book, lane.channelId, laneCoversChain(current, chainState), nowSeconds),
+            value: undefined,
+          };
+        });
+      }
+      return null;
+    } catch {
+      // An unreadable or unwritable record: never sign a channel voucher from it.
+      return null;
+    }
+  }
+
+  #finish(channelId: string, outcome: ChannelOutcome): Promise<void> {
+    return this.#withBook(async (book) => ({ book: finishLane(book, channelId, outcome), value: undefined }));
+  }
 
   async prepare(input: PrepareInput): Promise<Prepared> {
     const signer = input.signer as EvmSigner;
@@ -314,19 +585,77 @@ export class Eip155Scheme implements PaymentScheme {
     if (typeof providerId !== "string" || providerId.length === 0 || providerId.length > 256) {
       return { ok: false, guard: "G1", code: "G1_NOT_A_REQUIREMENT", reason: "the payment request names no provider" };
     }
+    // The price passed every guard, G7 included, against the spend recorded so far. Reserved now,
+    // before the channel step awaits, so a parallel call sees it; a channel reuse gives it back.
     const reserved: SignedVoucher = { at: nowSeconds, amount: built.typedData.message.amount.toString() };
     signed.push(reserved);
+    const release = () => {
+      const list = spentBy(localKey, Math.floor(this.o.now() / 1000));
+      const i = list.indexOf(reserved);
+      if (i !== -1) list.splice(i, 1);
+    };
+    const details = {
+      tool: input.tool,
+      network: r.network,
+      amount: { ...built.wire.amount },
+      provider: r.provider,
+      payer: r.payer,
+      idempotencyKey: input.idempotencyKey,
+    };
+
+    const perDay = usdToAtomic(this.o.limits.maxPerDay, entry!.decimals) ?? 0n;
+    const window = chain?.delegateMaxPerWindow !== undefined ? BigInt(chain.delegateMaxPerWindow) : perDay;
+    const plan = await this.#planChannel(input, entry!, r, localKey, window < perDay ? window : perDay);
+    if (plan !== null) {
+      // Only the increase counts toward the 24 h limit: a voucher that signs the same total
+      // again adds nothing the server could take.
+      reserved.amount = plan.increase.toString();
+      let used = false;
+      let finished = false;
+      const finish = async (outcome: ChannelOutcome) => {
+        if (finished) return;
+        finished = true;
+        await this.#finish(plan.channelId, outcome);
+      };
+      return {
+        ok: true,
+        metaKey: CHANNEL_VOUCHER_META,
+        details: {
+          ...details,
+          channel: {
+            channelId: plan.channelId,
+            cumulative: plan.cumulative.toString(),
+            calls: plan.calls,
+            increase: plan.increase.toString(),
+          },
+        },
+        sign: async () => {
+          if (used) throw new Error("a voucher is signed at most once");
+          used = true;
+          const signature = await signer.signTypedData(plan.typedData as never);
+          if (typeof signature !== "string" || !/^0x[0-9a-fA-F]{130}$/.test(signature))
+            throw new Error("the signer did not return a 65-byte signature");
+          this.#recordedPayer ??= getAddress(parseCaip10(r.payer)!.address);
+          return channelVoucherEnvelope(plan.wire, signature, providerId, r.contractVersion) as unknown as Record<
+            string,
+            unknown
+          >;
+        },
+        release: () => {
+          release();
+          // Never signed: the advanced pair is dropped with its lane, so no total is ever signed
+          // that the spend record did not count.
+          void finish("retire").catch(() => undefined);
+        },
+        finish,
+      };
+    }
+
     let used = false;
     return {
       ok: true,
-      details: {
-        tool: input.tool,
-        network: r.network,
-        amount: { ...built.wire.amount },
-        provider: r.provider,
-        payer: r.payer,
-        idempotencyKey: input.idempotencyKey,
-      },
+      metaKey: VOUCHER_META,
+      details,
       sign: async () => {
         if (used) throw new Error("a voucher is signed at most once");
         used = true;
@@ -336,11 +665,7 @@ export class Eip155Scheme implements PaymentScheme {
         this.#recordedPayer ??= getAddress(parseCaip10(r.payer)!.address);
         return voucherEnvelope(built.wire, signature, providerId, r.contractVersion);
       },
-      release: () => {
-        const list = spentBy(localKey, Math.floor(this.o.now() / 1000));
-        const i = list.indexOf(reserved);
-        if (i !== -1) list.splice(i, 1);
-      },
+      release,
     };
   }
 

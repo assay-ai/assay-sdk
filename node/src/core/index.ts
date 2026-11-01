@@ -1,10 +1,12 @@
 /**
- * The protocol core, without I/O except the chain reader: EIP-712 voucher and binding, guards
- * G1-G12, clock correction, CAIP parsing and `_meta` helpers. For tools built on the protocol
+ * The protocol core, without I/O except the chain reader: EIP-712 voucher, channel voucher (lanes,
+ * offer check, the contract's channel key) and binding, guards G1-G12, clock correction, CAIP parsing and `_meta` helpers. For tools built on the protocol
  * itself (such as `assay-mcp`); most callers use the `Assay` client instead.
  */
 export * from "./binding.js";
 export * from "./caip.js";
+export * from "./channel.js";
+export * from "./renew.js";
 export * from "./chain.js";
 export * from "./clock.js";
 export * from "./codes.js";

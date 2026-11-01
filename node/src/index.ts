@@ -14,6 +14,7 @@ export {
   PaymentRefusedError,
   PaymentRequiredError,
   PaymentSchemeUnsupportedError,
+  PaymentUnsettledLimitError,
   RateLimitError,
   ScopeMissingError,
   ServerError,
@@ -38,3 +39,5 @@ export type {
 export type { Receipt } from "./resources/receipts.js";
 export type { BindResult, PaidCallsState, PaidCallsStatus, WaitOptions } from "./resources/paid-calls.js";
 export type { Money } from "./core/voucher.js";
+export type { DebtRenewal, DebtRenewalStatus } from "./core/renew.js";
+export { fileChannelStore, memoryChannelStore, type ChannelStore } from "./channels.js";

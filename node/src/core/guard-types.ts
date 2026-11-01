@@ -95,6 +95,11 @@ export interface ChainState {
   readAt: number;
   delegateMaxVoucherAmount: string;
   maxVoucherAmount: string;
+  /**
+   * The payment key's window cap (the lower of the effective and the current value). Optional:
+   * read by the channel lane only, to rotate a lane before one settlement could pass it.
+   */
+  delegateMaxPerWindow?: string;
   /** The grant exists and is not revoked. */
   active: boolean;
   /** `delegationOf(...).validUntil`, Unix seconds. */

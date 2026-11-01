@@ -31,8 +31,8 @@ const VECTORS_DIR = fileURLToPath(new URL("../../vectors/eip155/", import.meta.u
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const load = (name: string): any => JSON.parse(readFileSync(`${VECTORS_DIR}${name}`, "utf8"));
 
-/** Every file in vectors/eip155/ is run here; a new file fails until it is listed. */
-const RUN_FILES = ["binding.json", "guards.json", "seq.json", "vouchers.json"];
+/** Every file in vectors/eip155/ is run here (channel.json in channel.test.ts); a new file fails until it is listed. */
+const RUN_FILES = ["binding.json", "channel.json", "guards.json", "seq.json", "vouchers.json"];
 
 type Path = (string | number)[];
 interface Change {

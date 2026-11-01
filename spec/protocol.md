@@ -407,11 +407,98 @@ A full, machine-readable code catalog will be published as `spec/errors.json`.
 
 A client conforms to this version when it passes `vectors/eip155/vouchers.json` and `vectors/eip155/binding.json`. Passing `vectors/eip155/guards.json` and `vectors/eip155/seq.json` is strongly recommended. See [`../vectors/README.md`](../vectors/README.md).
 
-## 12. Versions
+## 12. Channel vouchers (`channel-v1`, draft)
+
+Status: **draft**, off by default. A client signs channel vouchers only when it was configured with a store for its lanes and its own network table marks the escrow as having the channel door (`channels: true`); none of the built-in networks does yet. Everything in sections 3 to 11 stays as it is: the per-call voucher is still the default and the fallback.
+
+### 12.1 Negotiation
+
+- A client that can sign channel vouchers adds `params._meta["assay/paymentSchemes"] = ["channel-v1", "voucher"]` to every `tools/call` (unsigned attempt and signed retry). Without it the server never offers a channel.
+- On `PAYMENT_REQUIRED` the per-call requirement (section 4) is always present. When the server offers a channel it adds `_meta["assay/channelRequired"]`: `scheme` (`"channel-v1"`), `network`, `payer`, `provider`, `providerId`, `price` (Money), `contractVersion` (optional), `domain`, `primaryType`, `types`, `minLifeSeconds`, `maxLifeSeconds`, `maxOpenChannels`, `maxPendingPerChannel`, `signers`, `delegate`.
+- The client MUST run every guard of section 9 on the per-call requirement first, then check the offer against it and against its own network table: `network`, `payer`, `provider`, `providerId` and `delegate` equal the requirement's; `price` equals `requirement.amount` (amount, asset, decimals); `signers` includes `"delegate"`; `domain` has exactly `name: "Assay Settlement"`, `version: "2"`, `chainId` of the network and `verifyingContract` equal to the client's own escrow. An offer that fails any check is not signed; the call is paid per call.
+- The server never sends a cumulative, a calls counter or a "last accepted" value. A client MUST ignore any such field.
+
+### 12.2 Lanes
+
+- A **lane** is one channel: `(network, escrow, payer, signer, provider, channelId)`, with `channelId` 32 bytes from a CSPRNG. The contract's channel key is `keccak256(abi.encode(payer, signer, provider, channelId))`, `signer` the recovered key.
+- The client keeps, per lane: `maxSigned` (the highest cumulative it signed), `callsSigned`, the increase of the top pair, the last `issuedAt` and `expiresAt`, whether a voucher is in flight, whether the lane is retired, and when it was last checked against the chain. This record MUST be persisted before each signature (write-ahead) and MUST survive restarts; a damaged record is never reset.
+- One call in flight per lane; at most `min(8, maxOpenChannels)` lanes per pool. A lane rotates (is retired, and a new one opened) when `maxSigned + price` would pass the lower of the local per-day limit and the signer's on-chain window cap, or 2^56 - 1, or when `callsSigned + 1` would reach 2^24.
+- Next pair: `cumulative = maxSigned + price`, `calls = callsSigned + 1`, computed from the client's record only. After a refusal that did not store the voucher (below), the next voucher on that lane signs the same top pair again (for the same price only), with fresh times: an increase of zero. This re-sign is allowed only while the top pair's first signature could still be settled and is under 24 hours old (`now <= lastExpiresAt + 7200` and `now - lastIssuedAt <= 86400`); after that the lane is retired, so a new authorisation is never signed without being counted.
+- The record also keeps, per lane, the last 64 **renewable** pairs (`renewable`, oldest first): pairs it signed there whose voucher was served (stored) or got no answer (outcome unknown). A pair is added when it is signed (write-ahead) and removed when the server explicitly refuses it (section 12.4: the voucher was not stored). A record written before renew has no `renewable` and can renew only the top pair of a lane neither retired nor re-armed. The record also keeps the `issuedAt` of the last renew (section 12.6), below which no later voucher on the lane goes.
+- At most 16 retired lanes are kept per pool; the oldest whose last voucher expired are dropped first, and every retired lane is dropped 31 days after its last voucher expired (past the 30 days after which a buyer debt is written off, so a debt on it can still be renewed).
+- `issuedAt` is the corrected clock (section 7), never below the lane's last `issuedAt`; `expiresAt = issuedAt + min(240, maxLifeSeconds)`, and at least `minLifeSeconds + 30`.
+- **Chain check.** Before it continues a lane whose record it did not write or check in the last 600 s (always after a restart), the client reads `channelBooks(key, payer)` at one pinned block on all its RPCs (as section 9 G4 reads the grant) and decodes `settled` (bits 0 to 55) and `calls` (bits 56 to 79) of `state`. If `settled > maxSigned` or `calls > callsSigned`, the record does not cover what was signed: the lane is retired. Without an agreed read the lane is left alone and the call is paid per call.
+- **Spend guards count increases only.** G7 counts what each voucher adds (`cumulative - maxSigned`: the price, or zero for a re-signed pair), never the cumulative.
+
+### 12.3 Voucher and envelope
+
+```
+ChannelVoucher(address payer,address provider,bytes32 channelId,uint64 cumulative,uint32 calls,uint64 issuedAt,uint64 expiresAt)
+```
+
+under the domain of section 6.1. The field order is part of the type hash. The signed retry carries `params._meta["assay/channelVoucher"]`:
+
+```json
+{
+  "voucher": { "payer": "0x…", "provider": "0x…", "channelId": "0x<64 hex>", "cumulative": "300000", "calls": 3, "issuedAt": 1786000000, "expiresAt": 1786000240 },
+  "signature": "0x<65 bytes>",
+  "providerId": "<requirement.providerId>",
+  "contractVersion": 3
+}
+```
+
+`vectors/eip155/channel.json` pins the typed data, the hashes, the channel key, the slot decoding, the lane arithmetic and the offer checks.
+
+### 12.4 Outcomes
+
+| Server answer | Lane | Client |
+|---|---|---|
+| served or replayed | freed | |
+| `PAYMENT_UNSETTLED_LIMIT` (`retryable`, `retryAfter` in seconds) | re-armed: the same pair next time | resends the same envelope after a short `retryAfter` (60 s at most); otherwise reports it. Nothing was charged |
+| `CHANNEL_ROTATE` | retired | reports a retryable error; the next call opens a new lane. Five rotations within an hour stop channel offers for an hour |
+| `CHANNEL_LIMIT`, `CHANNEL_SIGNER_EXPIRING`, `CHANNEL_NOT_OFFERED` | re-armed | reports a retryable error and offers no channel for an hour (calls are paid per call meanwhile) |
+| `PAYMENT_DEBT_OUTSTANDING` | re-armed | renews the channel debts it signed (section 12.6) once, then reports it |
+| any other refusal | retired | reports it |
+| no answer | retired (its pair stays renewable: it may have been stored) | reports it |
+
+Every coded refusal above (the voucher was not stored) removes the refused pair from the lane's renewable pairs; a re-armed pair that is later served is added again.
+
+A client signs at most one voucher per logical call (section 3.2), channel or per call: it never re-signs on another lane, or per call, within the same call.
+
+### 12.5 Deviations from the channel design (SPEC-P2 v3 section 4), in this draft
+
+- `maxPendingPerChannel` in the offer is not used by the clients: the server enforces it (`PAYMENT_UNSETTLED_LIMIT` with reason `CHANNEL_PENDING_CAP`).
+- Signed history: the clients keep the last 64 renewable pairs per lane (v3: 16) and re-sign an older pair only as a debt renew (section 12.6); on a normal call only the top pair is ever re-signed (section 12.2).
+- `CHANNEL_SIGNER_EXPIRING` and `CHANNEL_NOT_OFFERED` re-arm the lane (the voucher was not stored) instead of retiring it; the pair is only ever re-signed, never lowered.
+- `CHANNEL_ROTATE` and `CHANNEL_LIMIT` are not retried within the call (v3 allows another lane or the per-call door at once): one voucher per logical call.
+
+### 12.6 Channel-debt renew
+
+A served call whose channel voucher could not be collected in time becomes a buyer debt, and paid calls are refused with `PAYMENT_DEBT_OUTSTANDING` until it is collected. Only the lane's own signer can renew a channel debt, so the client does it first. If the client can no longer renew it (the lane record is lost, or the pair was refused), a person can settle it per call in the web portal once the server marks it portal-settleable (`settleInPortalFrom`: about 2 hours after the covering voucher expired, when the channel voucher can no longer be collected):
+
+1. `GET /escrow/debts`. A debt with `voucherFormat: "CHANNEL"` and `state` `OPEN` or `WRITTEN_OFF` carries `channel: { cumulative, calls, channelId }`: the stored pair to renew and its lane (`channelId`, bytes32 hex). Per-call debts are left to the person (the portal); `REPLACING` ones are being collected already.
+2. The client renews only on the lane the debt names, and only when its own record holds that lane with the same network, escrow, payer and signing key, not in flight (a retired lane too), and the debt's pair is one of the lane's renewable pairs (section 12.2). Otherwise it signs nothing: `no_lane` when the debt names no lane, `not_signed_here` when the lane is not its own or the pair is not renewable on it (a lost record, another client, or a pair the server refused). It never signs a pair larger than, or different from, a renewable pair, and never tries another lane.
+3. It signs that pair again with fresh times (`issuedAt` the corrected clock, never below the lane's last `issuedAt` or last renew; a life of 240 s), records the renew's `issuedAt` first (write-ahead), and sends `POST /escrow/debts/{intentId}/voucher` with `{ "channelVoucher": { "voucher": {…}, "signature": "0x…" } }` (the voucher as in section 12.3, without `providerId`). The server answers `status: "REPLACING"`.
+4. `PAYMENT_UNSETTLED_LIMIT` (reason `CHANNEL_RENEW_RATE`) means the lane was renewed a moment ago. Any other refusal ends that debt. The list is read again after each request: one renew covers every lapsed call of its lane up to the pair. At most one signature per lane and 8 requests per run, one per debt; a debt that signs nothing does not count.
+5. At most one renewing run per minute per client (a manual run and the automatic one share it). Within that minute the debts are only listed, nothing is signed, and a debt reads as the last run left it (`renewed` as being collected).
+
+**What a renew authorises.** A renew re-signs a total this client already signed on that lane, with a fresh life. It is not counted again toward a spend limit, and nothing on the lane advances. It is not free of value: once the original signature expired, the renewed one lets the escrow collect up to that total again. That is why only pairs that were served (or of unknown outcome) are renewable, never a pair the server refused, and only on the lane the debt names: a dishonest debt list can then at most re-authorise a total the escrow could have collected for calls the server stored, never an unserved call or another lane.
+
+**What the agent reads.** A client renews by itself after a paid call is refused with `PAYMENT_DEBT_OUTSTANDING` (within the minute only lists; the call is not sent again), then:
+
+- every debt is being collected (renewed now or before): "Assay is collecting an earlier payment your agent already signed. Paid calls usually resume within about 5 minutes. This call was not charged." (retryable); when one of them is a per-call debt a person settled in the portal (a per-call `REPLACING` debt, also a channel debt moved to a per-call replacement) the agent did not sign it, and the text is the neutral "Assay is collecting an earlier payment. Paid calls usually resume within about 5 minutes. This call was not charged." (retryable);
+- a channel debt it cannot renew (`no_lane`, `not_signed_here`): "Your agent no longer has the payment record for an earlier channel payment. Settle it in the Assay app at {WEB}/funding once it is offered there.";
+- only channel debts not renewed just now (rate limited, refused, no answer): "Assay could not collect an earlier payment your agent signed yet. Call again in a minute or two. This call was not charged." (retryable);
+- otherwise (a per-call debt): the server's refusal (the MCP adds " Settle it at {WEB}/funding").
+
+Paid calls resume once the renewed payment is held on chain. A client that keeps lanes in memory only (`memoryChannelStore`) cannot renew a debt after its process ended. `channel.json` `renews` pins the renew of a kept pair, of the top pair and with a clock behind the lane, and the pairs that must be refused (including a refused pair and records without `renewable`).
+
+## 13. Versions
 
 | Axis | Version |
 |---|---|
 | This protocol | 1 (draft) |
+| Channel vouchers | `channel-v1` (draft, section 12) |
 | Voucher EIP-712 domain | `Assay Settlement`, version `2` |
 | Binding EIP-712 domain | `GoAssay Agent Binding`, version `1` |
 | REST API | `/api/v1` |

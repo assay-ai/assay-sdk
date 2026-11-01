@@ -22,7 +22,13 @@ from goassay.signers import evm_signer
 VECTORS = Path(__file__).resolve().parents[2] / "vectors" / "eip155"
 
 # Every file in vectors/eip155/ is run here; a new file fails until it is listed.
-RUN_FILES = ["binding.json", "guards.json", "seq.json", "vouchers.json"]
+RUN_FILES = [
+    "binding.json",
+    "channel.json",
+    "guards.json",
+    "seq.json",
+    "vouchers.json",
+]  # channel.json: test_channel.py
 
 
 def load(name: str) -> Any:

@@ -41,7 +41,7 @@ export interface Seen {
 }
 
 export type Answer = { status?: number; headers?: Record<string, string>; body: unknown };
-export type Handler = (req: Seen) => Answer | undefined;
+export type Handler = (req: Seen) => Answer | undefined | Promise<Answer | undefined>;
 
 const word = (n: bigint | number) => BigInt(n).toString(16).padStart(64, "0");
 const selector = (sig: string) => keccak256(toBytes(sig)).slice(2, 10);
@@ -118,13 +118,13 @@ export function fakeClient(o: {
         status: a.status ?? 200,
         headers: { "content-type": "application/json", date, ...a.headers },
       });
-    if (url.startsWith("https://rpc")) return respond(o.rpc?.(req) ?? { body: rpcAnswer(body) });
+    if (url.startsWith("https://rpc")) return respond((await o.rpc?.(req)) ?? { body: rpcAnswer(body) });
     if (url.startsWith(MCP)) {
       const out = o.mcp?.(body.params, req);
       if (out && typeof out === "object" && "body" in out) return respond(out as Answer);
       return respond({ body: rpcResult(body.id, out ?? {}) });
     }
-    const a = o.api?.(req);
+    const a = await o.api?.(req);
     if (a) return respond(a);
     return respond({
       status: 404,

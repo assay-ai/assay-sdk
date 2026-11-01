@@ -3,6 +3,7 @@ import { getAddress } from "../core/hex.js";
 import { fingerprint, isObject } from "../core/meta.js";
 import { AssayError, ConfigError, PaymentNetworkUnknownError, ServerError } from "../errors.js";
 import { bindEvmKey } from "../schemes/eip155/bind.js";
+import type { DebtRenewal } from "../core/renew.js";
 import type { EvmSigner } from "../signer.js";
 import type { ClientContext } from "./context.js";
 
@@ -184,6 +185,37 @@ export class PaidCalls {
     });
     const bindStatus = answer.status === "PENDING_APPROVAL" ? "PENDING_APPROVAL" : "ACTIVE";
     return { ...(await this.status()), alreadyBound: false, bindStatus };
+  }
+
+  /**
+   * Renews the payer's buyer debts on payment channels that this client signed. A channel debt
+   * (a served call whose channel voucher could not be collected in time) can only be settled by
+   * the key that signed the lane, so the web portal cannot do it. For each `CHANNEL` debt of
+   * `GET /escrow/debts`, the debt's `(cumulative, calls)` pair is re-signed with fresh times and
+   * sent to `POST /escrow/debts/{intentId}/voucher`, only on the lane the debt names
+   * (`channel.channelId`), only when that is this client's own lane (same network, escrow, payer
+   * and key) and its record shows that exact pair signed and served, or with no answer. Never a
+   * larger pair, a pair the server refused, or another lane; at most one signature per lane per
+   * run. The renew re-authorises a total this client already signed on that lane; the limits do
+   * not count it again. Paid calls resume once the renewed payment is held on chain (usually
+   * within about 5 minutes).
+   *
+   * One result per debt: `renewed`, `pending` (being collected already), `per_call` (a person
+   * signs it in the portal), `no_lane` (the debt names no lane), `not_signed_here`,
+   * `other_wallet` (another wallet's of the organization), `rate_limited` (`retryAfterMs`), `refused` (`code`) or `failed`. Throttled with the automatic
+   * run: at most one renewing run a minute; within it the debts are only listed (nothing signed).
+   * Needs the `channels` option and an eip155 signer, and the `payments` scope. A
+   * `memoryChannelStore()` forgets its lanes when the process ends: a debt left behind then can
+   * no longer be renewed (use `fileChannelStore`). `tools.call` runs this by itself after a paid
+   * call refused for a debt.
+   */
+  async renewChannelDebts(): Promise<DebtRenewal[]> {
+    const signer = this.#signer();
+    if (signer === null) throw new ConfigError("renewChannelDebts() needs an eip155 signer");
+    const scheme = this.#c.schemes.get("eip155");
+    const out = scheme?.renewChannelDebts ? await scheme.renewChannelDebts(this.#c.api, signer) : null;
+    if (out === null) throw new ConfigError("renewChannelDebts() needs the channels option (a lane store)");
+    return out;
   }
 
   /**

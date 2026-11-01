@@ -1,0 +1,1391 @@
+{
+  "description": "Channel vouchers (channel-v1): the contract's ChannelVoucher typed data, its hashes and the channel key, computed with foundry from assay-evm's Types.sol and ChannelDoor (digestOf, keyOf, unpack) and reproduced with foundry cast; the lane arithmetic every client implements; and the checks on the server's channel offer.",
+  "testKey": {
+    "label": "TEST ONLY. The well-known anvil/hardhat default account 0. Public; never fund it or use it for anything real.",
+    "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  },
+  "typeString": "ChannelVoucher(address payer,address provider,bytes32 channelId,uint64 cumulative,uint32 calls,uint64 issuedAt,uint64 expiresAt)",
+  "typeHash": "0x7ba3537cf51dfda79b983fb69f43cd617e1616e7101451c035d8d59c9e753682",
+  "cases": [
+    {
+      "name": "robinhood-mainnet-escrow",
+      "note": "The production escrow's domain (its domain separator equals the escrow's on-chain DOMAIN_SEPARATOR()); a lane at its third call.",
+      "network": {
+        "id": "eip155:4663",
+        "chainId": 4663,
+        "escrow": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e",
+        "asset": "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+        "decimals": 6
+      },
+      "lane": {
+        "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef"
+      },
+      "step": {
+        "cumulative": "300000",
+        "calls": 3,
+        "issuedAt": 1786000000,
+        "expiresAt": 1786000240
+      },
+      "wire": {
+        "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+        "cumulative": "300000",
+        "calls": 3,
+        "issuedAt": 1786000000,
+        "expiresAt": 1786000240
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 4663,
+          "verifyingContract": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e"
+        },
+        "types": {
+          "ChannelVoucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "channelId",
+              "type": "bytes32"
+            },
+            {
+              "name": "cumulative",
+              "type": "uint64"
+            },
+            {
+              "name": "calls",
+              "type": "uint32"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "ChannelVoucher",
+        "message": {
+          "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+          "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+          "cumulative": "300000",
+          "calls": "3",
+          "issuedAt": "1786000000",
+          "expiresAt": "1786000240"
+        }
+      },
+      "domainSeparator": "0x8af355df3c16d2a6ba6b83f787f6886d63b19cd54f241cb88203121fdd9e4010",
+      "structHash": "0xea1c2b3b8e7f5dda9666d35591bc3839a61b8bdf4b158319426829de5f137068",
+      "digest": "0x1c2a62ba2316ab0c22320f0b751e5dc46e52b979be35c1426408d102d326dce9",
+      "key": "0xc91d4931ac38c8b45ec7563c7bb30cb3c1297d3495dc6500c10f78236bdabb7e",
+      "signature": "0xe6ba25d8a4d0ec2cff9f86dbfe11533785ad00e224b5ef2c8841587bd196bd6655d897f6441727316d5b04f4f4070a6556998d10965e080fc15dc84b8a46f2d31b",
+      "slot": "0x0000000000000000000000000000000000000000007b000003000000000493e0",
+      "slotDecoded": {
+        "settled": "300000",
+        "calls": 3
+      }
+    },
+    {
+      "name": "placeholder-max-values",
+      "note": "Placeholder chain; cumulative 2^56 - 1, calls 2^24 - 1 (the contract's limits) and a 300 s life.",
+      "network": {
+        "id": "eip155:31337",
+        "chainId": 31337,
+        "escrow": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "lane": {
+        "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "channelId": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "step": {
+        "cumulative": "72057594037927935",
+        "calls": 16777215,
+        "issuedAt": 1786000000,
+        "expiresAt": 1786000300
+      },
+      "wire": {
+        "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "channelId": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "cumulative": "72057594037927935",
+        "calls": 16777215,
+        "issuedAt": 1786000000,
+        "expiresAt": 1786000300
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 31337,
+          "verifyingContract": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+        },
+        "types": {
+          "ChannelVoucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "channelId",
+              "type": "bytes32"
+            },
+            {
+              "name": "cumulative",
+              "type": "uint64"
+            },
+            {
+              "name": "calls",
+              "type": "uint32"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "ChannelVoucher",
+        "message": {
+          "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+          "channelId": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "cumulative": "72057594037927935",
+          "calls": "16777215",
+          "issuedAt": "1786000000",
+          "expiresAt": "1786000300"
+        }
+      },
+      "domainSeparator": "0xa5d35afd2d19d04217c8970bd51578492270fb9cf1dfd2609202d6e130c75b17",
+      "structHash": "0x681c448d48425fcb00fa12bafd98c5dc21756a9fcb116b66029d87f1f04e4761",
+      "digest": "0xc1bbc538a6d00c39bf03cf4ba58b855bb2ed324de813bd4eae5b77ec16a883bb",
+      "key": "0x5d8c995f1933aedbc91ccc2f8aac94b98696f18ee1f771bd9b5f14828a414c15",
+      "signature": "0x26885061e04549344902254c1024ba1e14654d74aedfbb63e8a2ad4c4a1f0e9b2ce1f4bf3d27958e20f106f7db7471d19a9ce4947f5387a5c3ec3e94533252141b",
+      "slot": "0x0000000000000000000000000000000000000000007bffffffffffffffffffff",
+      "slotDecoded": {
+        "settled": "72057594037927935",
+        "calls": 16777215
+      }
+    },
+    {
+      "name": "open-first-call",
+      "note": "Placeholder chain; a lane's first voucher (cumulative 1, calls 1).",
+      "network": {
+        "id": "eip155:31337",
+        "chainId": 31337,
+        "escrow": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "lane": {
+        "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "step": {
+        "cumulative": "1",
+        "calls": 1,
+        "issuedAt": 1,
+        "expiresAt": 61
+      },
+      "wire": {
+        "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "cumulative": "1",
+        "calls": 1,
+        "issuedAt": 1,
+        "expiresAt": 61
+      },
+      "typedData": {
+        "domain": {
+          "name": "Assay Settlement",
+          "version": "2",
+          "chainId": 31337,
+          "verifyingContract": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+        },
+        "types": {
+          "ChannelVoucher": [
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "provider",
+              "type": "address"
+            },
+            {
+              "name": "channelId",
+              "type": "bytes32"
+            },
+            {
+              "name": "cumulative",
+              "type": "uint64"
+            },
+            {
+              "name": "calls",
+              "type": "uint32"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint64"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64"
+            }
+          ]
+        },
+        "primaryType": "ChannelVoucher",
+        "message": {
+          "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "cumulative": "1",
+          "calls": "1",
+          "issuedAt": "1",
+          "expiresAt": "61"
+        }
+      },
+      "domainSeparator": "0xa5d35afd2d19d04217c8970bd51578492270fb9cf1dfd2609202d6e130c75b17",
+      "structHash": "0x91b6a9ea4ad677db2c7ed1899dc19681e9a36d56065ce5c64f1e438526ae2e91",
+      "digest": "0x539bf417fba476bfb0c4de32d63bbb521e9be863590bd9c42ccac14cbe290625",
+      "key": "0x48f265ce58aa200d86261e011e0995091a313b4dec66b3174c110a9c6e77181c",
+      "signature": "0x82234aeb649a0a8d5b69bee2f32eb293cf37b26cb2271df1404174d0daf881234ba2c63b62faef26f429390eef5903b83347e68c57bd1984fd43d6312196ca1c1b",
+      "slot": "0x0000000000000000000000000000000000000000007b00000100000000000001",
+      "slotDecoded": {
+        "settled": "1",
+        "calls": 1
+      }
+    }
+  ],
+  "lanes": {
+    "note": "One pool, rotateAt 1000000 (the lower of perDay and the key's window cap), maxLanes 2, new channel ids taken in order from channelIds. 'take' picks a lane (pickLane; a re-armed lane whose top pair expired more than 7200 s ago, or was signed more than 24 h ago, is retired) and, unless the pick needs a chain check or none is free, advances it (advanceLane) with the given issuedAt and a 240 s life; 'finish' reports an outcome (finishLane); 'check' records a chain read (recordCheck with laneCoversChain); 'state' looks at one lane after pruning at 'now' (a lane in flight for more than 600 s is retired).",
+    "pool": {
+      "network": "eip155:31337",
+      "escrow": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+      "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+    },
+    "rotateAt": "1000000",
+    "maxLanes": 2,
+    "lifetimeSeconds": 240,
+    "channelIds": [
+      "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "0x0000000000000000000000000000000000000000000000000000000000000003",
+      "0x0000000000000000000000000000000000000000000000000000000000000004",
+      "0x0000000000000000000000000000000000000000000000000000000000000005",
+      "0x0000000000000000000000000000000000000000000000000000000000000006",
+      "0x0000000000000000000000000000000000000000000000000000000000000007",
+      "0x0000000000000000000000000000000000000000000000000000000000000008"
+    ],
+    "steps": [
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000000,
+        "issuedAt": 1786000000,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "cumulative": "100000",
+          "calls": 1,
+          "increase": "100000",
+          "issuedAt": 1786000000,
+          "expiresAt": 1786000240,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "outcome": "served"
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000000,
+        "issuedAt": 1786000000,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "cumulative": "200000",
+          "calls": 2,
+          "increase": "100000",
+          "issuedAt": 1786000000,
+          "expiresAt": 1786000240,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "outcome": "reuse"
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000000,
+        "issuedAt": 1786000000,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "cumulative": "200000",
+          "calls": 2,
+          "increase": "0",
+          "issuedAt": 1786000000,
+          "expiresAt": 1786000240,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "outcome": "served"
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000001,
+        "issuedAt": 1785999950,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "cumulative": "300000",
+          "calls": 3,
+          "increase": "100000",
+          "issuedAt": 1786000000,
+          "expiresAt": 1786000240,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000001,
+        "issuedAt": 1786000001,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "cumulative": "100000",
+          "calls": 1,
+          "increase": "100000",
+          "issuedAt": 1786000001,
+          "expiresAt": 1786000241,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000001,
+        "issuedAt": 1786000001,
+        "expect": {
+          "none": "every lane is busy"
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "outcome": "retire"
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "outcome": "served"
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000002,
+        "issuedAt": 1786000002,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "cumulative": "200000",
+          "calls": 2,
+          "increase": "100000",
+          "issuedAt": 1786000002,
+          "expiresAt": 1786000242,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "outcome": "reuse"
+      },
+      {
+        "op": "take",
+        "price": "300000",
+        "now": 1786000003,
+        "issuedAt": 1786000003,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000003",
+          "cumulative": "300000",
+          "calls": 1,
+          "increase": "300000",
+          "issuedAt": 1786000003,
+          "expiresAt": 1786000243,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000003",
+        "outcome": "served"
+      },
+      {
+        "op": "take",
+        "price": "750000",
+        "now": 1786000004,
+        "issuedAt": 1786000004,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004",
+          "cumulative": "750000",
+          "calls": 1,
+          "increase": "750000",
+          "issuedAt": 1786000004,
+          "expiresAt": 1786000244,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004",
+        "outcome": "served"
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000605,
+        "issuedAt": 1786000605,
+        "expect": {
+          "needsCheck": true,
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004"
+        }
+      },
+      {
+        "op": "check",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004",
+        "now": 1786000605,
+        "chain": {
+          "settled": "750000",
+          "calls": 1
+        },
+        "expect": {
+          "covered": true
+        }
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786000605,
+        "issuedAt": 1786000605,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004",
+          "cumulative": "850000",
+          "calls": 2,
+          "increase": "100000",
+          "issuedAt": 1786000605,
+          "expiresAt": 1786000845,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004",
+        "outcome": "served"
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786001206,
+        "issuedAt": 1786001206,
+        "expect": {
+          "needsCheck": true,
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004"
+        }
+      },
+      {
+        "op": "check",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000004",
+        "now": 1786001206,
+        "chain": {
+          "settled": "850001",
+          "calls": 2
+        },
+        "expect": {
+          "covered": false
+        }
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786001206,
+        "issuedAt": 1786001206,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000005",
+          "cumulative": "100000",
+          "calls": 1,
+          "increase": "100000",
+          "issuedAt": 1786001206,
+          "expiresAt": 1786001446,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "state",
+        "now": 1786001807,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000005",
+          "retired": true,
+          "inFlightSince": null
+        }
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786001807,
+        "issuedAt": 1786001807,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000006",
+          "cumulative": "100000",
+          "calls": 1,
+          "increase": "100000",
+          "issuedAt": 1786001807,
+          "expiresAt": 1786002047,
+          "needsCheck": false
+        }
+      },
+      {
+        "op": "finish",
+        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000006",
+        "outcome": "reuse"
+      },
+      {
+        "op": "take",
+        "price": "100000",
+        "now": 1786009248,
+        "issuedAt": 1786009248,
+        "expect": {
+          "channelId": "0x0000000000000000000000000000000000000000000000000000000000000007",
+          "cumulative": "100000",
+          "calls": 1,
+          "increase": "100000",
+          "issuedAt": 1786009248,
+          "expiresAt": 1786009488,
+          "needsCheck": false
+        }
+      }
+    ]
+  },
+  "offers": {
+    "note": "checkChannelOffer(offer, requirement, network): 'valid' passes and gives the expected offer; each 'invalid' applies changes to a copy of 'offer' (set/delete as in guards.json; an empty path replaces the whole offer) and must be refused. The requirement is the per-call requirement of the same answer, after G1-G12 passed.",
+    "network": {
+      "id": "eip155:31337",
+      "chainId": 31337,
+      "escrow": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+      "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+      "decimals": 6
+    },
+    "requirement": {
+      "rail": "B",
+      "scheme": "voucher",
+      "network": "eip155:31337",
+      "payer": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "payTo": "eip155:31337:0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0",
+      "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "providerId": "00000000-0000-4000-8000-000000000001",
+      "amount": {
+        "amount": "100000",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "resource": "/mcp/tools/weather_forecast",
+      "requestHash": "sha256:5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f5f1e3a7b9c2d4e6f",
+      "seq": "7",
+      "maxTimeoutSeconds": 300,
+      "signers": [
+        "payer",
+        "delegate"
+      ],
+      "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    "offer": {
+      "scheme": "channel-v1",
+      "network": "eip155:31337",
+      "payer": "eip155:31337:0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "provider": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "providerId": "00000000-0000-4000-8000-000000000001",
+      "price": {
+        "amount": "100000",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "contractVersion": 3,
+      "domain": {
+        "name": "Assay Settlement",
+        "version": "2",
+        "chainId": 31337,
+        "verifyingContract": "0xE5c0e5C0e5C0e5C0E5c0E5c0E5C0E5C0E5C0E5C0"
+      },
+      "primaryType": "ChannelVoucher",
+      "types": {
+        "ChannelVoucher": [
+          {
+            "name": "payer",
+            "type": "address"
+          },
+          {
+            "name": "provider",
+            "type": "address"
+          },
+          {
+            "name": "channelId",
+            "type": "bytes32"
+          },
+          {
+            "name": "cumulative",
+            "type": "uint64"
+          },
+          {
+            "name": "calls",
+            "type": "uint32"
+          },
+          {
+            "name": "issuedAt",
+            "type": "uint64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint64"
+          }
+        ]
+      },
+      "minLifeSeconds": 60,
+      "maxLifeSeconds": 300,
+      "maxOpenChannels": 16,
+      "maxPendingPerChannel": {
+        "amount": "5000000",
+        "asset": "eip155:31337/erc20:0xA55E7a55E7A55E7a55e7A55e7a55e7A55e7a55E7",
+        "decimals": 6
+      },
+      "signers": [
+        "payer",
+        "delegate"
+      ],
+      "delegate": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    "valid": {
+      "price": "100000",
+      "lifetimeSeconds": 240,
+      "maxLanes": 8
+    },
+    "invalid": [
+      {
+        "name": "other-escrow",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "domain",
+              "verifyingContract"
+            ],
+            "value": "0x1111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      {
+        "name": "other-chain-in-domain",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "domain",
+              "chainId"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "name": "other-domain-name",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "domain",
+              "name"
+            ],
+            "value": "Assay Settlement v3"
+          }
+        ]
+      },
+      {
+        "name": "other-domain-version",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "domain",
+              "version"
+            ],
+            "value": "3"
+          }
+        ]
+      },
+      {
+        "name": "extra-domain-field",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "domain",
+              "salt"
+            ],
+            "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      {
+        "name": "not-channel-v1",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "scheme"
+            ],
+            "value": "voucher"
+          }
+        ]
+      },
+      {
+        "name": "other-network",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "network"
+            ],
+            "value": "eip155:1"
+          }
+        ]
+      },
+      {
+        "name": "other-payer",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "payer"
+            ],
+            "value": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+          }
+        ]
+      },
+      {
+        "name": "other-provider",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "provider"
+            ],
+            "value": "eip155:31337:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+          }
+        ]
+      },
+      {
+        "name": "other-provider-id",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "providerId"
+            ],
+            "value": "00000000-0000-4000-8000-000000000002"
+          }
+        ]
+      },
+      {
+        "name": "other-delegate",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "delegate"
+            ],
+            "value": "eip155:31337:0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+          }
+        ]
+      },
+      {
+        "name": "no-delegate-signer",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "signers"
+            ],
+            "value": [
+              "payer"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "price-above-requirement",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "price",
+              "amount"
+            ],
+            "value": "100001"
+          }
+        ]
+      },
+      {
+        "name": "price-other-asset",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "price",
+              "asset"
+            ],
+            "value": "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+          }
+        ]
+      },
+      {
+        "name": "price-other-decimals",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "price",
+              "decimals"
+            ],
+            "value": 18
+          }
+        ]
+      },
+      {
+        "name": "price-zero",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "price",
+              "amount"
+            ],
+            "value": "0"
+          }
+        ]
+      },
+      {
+        "name": "price-not-canonical",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "price",
+              "amount"
+            ],
+            "value": "0100000"
+          }
+        ]
+      },
+      {
+        "name": "life-too-short",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "maxLifeSeconds"
+            ],
+            "value": 60
+          }
+        ]
+      },
+      {
+        "name": "life-too-long",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "maxLifeSeconds"
+            ],
+            "value": 301
+          }
+        ]
+      },
+      {
+        "name": "no-channel-cap",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "maxOpenChannels"
+            ],
+            "value": 0
+          }
+        ]
+      },
+      {
+        "name": "other-primary-type",
+        "changes": [
+          {
+            "op": "set",
+            "path": [
+              "primaryType"
+            ],
+            "value": "Voucher"
+          }
+        ]
+      },
+      {
+        "name": "not-an-object",
+        "changes": [
+          {
+            "op": "set",
+            "path": [],
+            "value": null
+          }
+        ]
+      }
+    ]
+  },
+  "renews": {
+    "note": "renewLane(book, channelId, cumulative, calls, issuedAt, 240) on the lane a debt names: a buyer-debt renew re-signs only a renewable pair of that lane, a pair this client signed there whose voucher was served (stored) or whose outcome is unknown (the lane's 'renewable' list; a pair the server refused is removed from it by finishLane). A record without 'renewable' (written before renew) can renew only the top pair of a lane that is neither retired nor re-armed. Fresh times: issuedAt never below the lane's lastIssuedAt or renewedIssuedAt; nothing else on the lane changes but renewedIssuedAt. Each case may change the base lane with 'lane' (a null value deletes the field). 'valid' gives the voucher, its EIP-712 digest and the test key's signature (the same ChannelVoucher type and escrow domain as 'cases'); 'invalid' must be refused (nothing signed). The base lane is retired: a debt often outlives its lane.",
+    "network": {
+      "id": "eip155:4663",
+      "chainId": 4663,
+      "escrow": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e",
+      "asset": "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+      "decimals": 6
+    },
+    "lane": {
+      "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+      "network": "eip155:4663",
+      "escrow": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e",
+      "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "maxSigned": "300000",
+      "callsSigned": 3,
+      "topIncrease": "50000",
+      "lastIssuedAt": 1786000000,
+      "lastExpiresAt": 1786000240,
+      "reuseTop": false,
+      "inFlightSince": null,
+      "retired": true,
+      "checkedAt": null,
+      "renewable": [
+        [
+          "100000",
+          1
+        ],
+        [
+          "250000",
+          2
+        ],
+        [
+          "300000",
+          3
+        ]
+      ]
+    },
+    "lifetimeSeconds": 240,
+    "valid": [
+      {
+        "name": "a kept pair below the top (the debt's own pair)",
+        "cumulative": "250000",
+        "calls": 2,
+        "issuedAt": 1786007200,
+        "expect": {
+          "wire": {
+            "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+            "cumulative": "250000",
+            "calls": 2,
+            "issuedAt": 1786007200,
+            "expiresAt": 1786007440
+          },
+          "typedData": {
+            "domain": {
+              "name": "Assay Settlement",
+              "version": "2",
+              "chainId": 4663,
+              "verifyingContract": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e"
+            },
+            "types": {
+              "ChannelVoucher": [
+                {
+                  "name": "payer",
+                  "type": "address"
+                },
+                {
+                  "name": "provider",
+                  "type": "address"
+                },
+                {
+                  "name": "channelId",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "cumulative",
+                  "type": "uint64"
+                },
+                {
+                  "name": "calls",
+                  "type": "uint32"
+                },
+                {
+                  "name": "issuedAt",
+                  "type": "uint64"
+                },
+                {
+                  "name": "expiresAt",
+                  "type": "uint64"
+                }
+              ]
+            },
+            "primaryType": "ChannelVoucher",
+            "message": {
+              "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+              "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+              "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+              "cumulative": "250000",
+              "calls": "2",
+              "issuedAt": "1786007200",
+              "expiresAt": "1786007440"
+            }
+          },
+          "digest": "0xea28c312cd1fffeaf3f337cdba45f60fb23a79a964109f62f3e878f05b6ec87f",
+          "signature": "0x2d37cef60538ae89f067fe72f128eed31a5876c0d6908ad7019b30ed833d83a67d02f45f8272570e3f84a64e4771e802f688475293c54a0f340a77d0359f4f901b",
+          "renewedIssuedAt": 1786007200
+        }
+      },
+      {
+        "name": "the top pair",
+        "cumulative": "300000",
+        "calls": 3,
+        "issuedAt": 1786007200,
+        "expect": {
+          "wire": {
+            "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+            "cumulative": "300000",
+            "calls": 3,
+            "issuedAt": 1786007200,
+            "expiresAt": 1786007440
+          },
+          "typedData": {
+            "domain": {
+              "name": "Assay Settlement",
+              "version": "2",
+              "chainId": 4663,
+              "verifyingContract": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e"
+            },
+            "types": {
+              "ChannelVoucher": [
+                {
+                  "name": "payer",
+                  "type": "address"
+                },
+                {
+                  "name": "provider",
+                  "type": "address"
+                },
+                {
+                  "name": "channelId",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "cumulative",
+                  "type": "uint64"
+                },
+                {
+                  "name": "calls",
+                  "type": "uint32"
+                },
+                {
+                  "name": "issuedAt",
+                  "type": "uint64"
+                },
+                {
+                  "name": "expiresAt",
+                  "type": "uint64"
+                }
+              ]
+            },
+            "primaryType": "ChannelVoucher",
+            "message": {
+              "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+              "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+              "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+              "cumulative": "300000",
+              "calls": "3",
+              "issuedAt": "1786007200",
+              "expiresAt": "1786007440"
+            }
+          },
+          "digest": "0x867ad590f695406bec76cc709f7d60338058dcbe60dd4a3cdea9bb267a0577c0",
+          "signature": "0x039ae50ce19a8ef4ae8376a17ab7c1af5294f43cdab192ad6c57232026f04eaf5e163d10c3a9e30573acf15088f676179c5b0979bd9d89a8648e2e354edd88ef1c",
+          "renewedIssuedAt": 1786007200
+        }
+      },
+      {
+        "name": "a clock behind the lane: issuedAt is the lane's last",
+        "cumulative": "100000",
+        "calls": 1,
+        "issuedAt": 1785999000,
+        "expect": {
+          "wire": {
+            "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+            "cumulative": "100000",
+            "calls": 1,
+            "issuedAt": 1786000000,
+            "expiresAt": 1786000240
+          },
+          "typedData": {
+            "domain": {
+              "name": "Assay Settlement",
+              "version": "2",
+              "chainId": 4663,
+              "verifyingContract": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e"
+            },
+            "types": {
+              "ChannelVoucher": [
+                {
+                  "name": "payer",
+                  "type": "address"
+                },
+                {
+                  "name": "provider",
+                  "type": "address"
+                },
+                {
+                  "name": "channelId",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "cumulative",
+                  "type": "uint64"
+                },
+                {
+                  "name": "calls",
+                  "type": "uint32"
+                },
+                {
+                  "name": "issuedAt",
+                  "type": "uint64"
+                },
+                {
+                  "name": "expiresAt",
+                  "type": "uint64"
+                }
+              ]
+            },
+            "primaryType": "ChannelVoucher",
+            "message": {
+              "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+              "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+              "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+              "cumulative": "100000",
+              "calls": "1",
+              "issuedAt": "1786000000",
+              "expiresAt": "1786000240"
+            }
+          },
+          "digest": "0xe90689e5011601c3fc63736177fb6944677af11d5c09725f1e236602c53a4250",
+          "signature": "0x4010994a4751eb973bee06efef242d87241ee8d5814bcf739bd14c3f9eda42355609858ee47799b00cb2db0a9a2907691e5782e9172110dc46c075112deda3401c",
+          "renewedIssuedAt": 1786000000
+        }
+      },
+      {
+        "name": "a record without 'renewable' (from before), live lane: only its top pair",
+        "cumulative": "300000",
+        "calls": 3,
+        "issuedAt": 1786007200,
+        "expect": {
+          "wire": {
+            "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+            "cumulative": "300000",
+            "calls": 3,
+            "issuedAt": 1786007200,
+            "expiresAt": 1786007440
+          },
+          "typedData": {
+            "domain": {
+              "name": "Assay Settlement",
+              "version": "2",
+              "chainId": 4663,
+              "verifyingContract": "0xe54E0142b1D0d34226498D563A16074C81Bc9A5e"
+            },
+            "types": {
+              "ChannelVoucher": [
+                {
+                  "name": "payer",
+                  "type": "address"
+                },
+                {
+                  "name": "provider",
+                  "type": "address"
+                },
+                {
+                  "name": "channelId",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "cumulative",
+                  "type": "uint64"
+                },
+                {
+                  "name": "calls",
+                  "type": "uint32"
+                },
+                {
+                  "name": "issuedAt",
+                  "type": "uint64"
+                },
+                {
+                  "name": "expiresAt",
+                  "type": "uint64"
+                }
+              ]
+            },
+            "primaryType": "ChannelVoucher",
+            "message": {
+              "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+              "provider": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+              "channelId": "0x5f1e3a7b9c2d4e6f00112233445566778899aabbccddeeff0123456789abcdef",
+              "cumulative": "300000",
+              "calls": "3",
+              "issuedAt": "1786007200",
+              "expiresAt": "1786007440"
+            }
+          },
+          "digest": "0x867ad590f695406bec76cc709f7d60338058dcbe60dd4a3cdea9bb267a0577c0",
+          "signature": "0x039ae50ce19a8ef4ae8376a17ab7c1af5294f43cdab192ad6c57232026f04eaf5e163d10c3a9e30573acf15088f676179c5b0979bd9d89a8648e2e354edd88ef1c",
+          "renewedIssuedAt": 1786007200
+        },
+        "lane": {
+          "renewable": null,
+          "retired": false
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "a pair larger than the lane signed",
+        "cumulative": "400000",
+        "calls": 4
+      },
+      {
+        "name": "the top cumulative with more calls",
+        "cumulative": "300000",
+        "calls": 4
+      },
+      {
+        "name": "a kept cumulative with other calls",
+        "cumulative": "250000",
+        "calls": 3
+      },
+      {
+        "name": "a pair below the top that was never signed",
+        "cumulative": "200000",
+        "calls": 2
+      },
+      {
+        "name": "zero",
+        "cumulative": "0",
+        "calls": 0
+      },
+      {
+        "name": "the lane in flight",
+        "cumulative": "250000",
+        "calls": 2,
+        "lane": {
+          "inFlightSince": 1786007100
+        }
+      },
+      {
+        "name": "a pair the server refused (removed from renewable)",
+        "cumulative": "250000",
+        "calls": 2,
+        "lane": {
+          "renewable": [
+            [
+              "100000",
+              1
+            ],
+            [
+              "300000",
+              3
+            ]
+          ]
+        }
+      },
+      {
+        "name": "a record without 'renewable' (from before), retired: not even its top pair",
+        "cumulative": "300000",
+        "calls": 3,
+        "lane": {
+          "renewable": null
+        }
+      },
+      {
+        "name": "a record without 'renewable', live but re-armed: not its top pair",
+        "cumulative": "300000",
+        "calls": 3,
+        "lane": {
+          "renewable": null,
+          "retired": false,
+          "reuseTop": true
+        }
+      },
+      {
+        "name": "a record without 'renewable': an older pair",
+        "cumulative": "250000",
+        "calls": 2,
+        "lane": {
+          "renewable": null,
+          "retired": false
+        }
+      }
+    ]
+  }
+}

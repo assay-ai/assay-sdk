@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import json
 import math
 import threading
@@ -14,6 +15,14 @@ from typing import TYPE_CHECKING, Any
 
 from goassay import _ops
 from goassay._caip import namespace_of
+from goassay._channel import (
+    CHANNEL_REQUIRED_META,
+    PAYMENT_DEBT_OUTSTANDING,
+    PAYMENT_SCHEMES_META,
+    PAYMENT_UNSETTLED_LIMIT,
+    channel_fallback_of,
+    lane_outcome_of,
+)
 from goassay._context import Context
 from goassay._guards import GuardResult
 from goassay._http import MAX_RETRY_AFTER_SECONDS
@@ -29,13 +38,13 @@ from goassay._meta import (
     RECEIPT_META,
     REPLAYED_META,
     SEARCH_TOOLS,
-    VOUCHER_META,
     is_idempotency_key,
     is_tool_name,
     quote_of,
     structured_of,
 )
 from goassay._ops import Flow
+from goassay._renew import channel_debt_answer, renew_channel_debts
 
 if TYPE_CHECKING:
     from goassay._client import Assay, AsyncAssay
@@ -158,7 +167,10 @@ def _send(c: Context, params: dict[str, Any]) -> Flow[dict[str, Any]]:
         result = yield from c.mcp("tools/call", params)
         e = _assay_error(result)
         # The first attempt still runs, or a refusal-rate limit: wait and send the same bytes again.
-        if e is None or e.get("code") not in (IN_PROGRESS_CODE, "RATE_LIMITED") or attempt >= c.max_retries:
+        # A refusal only because earlier payments still settle (nothing charged, nothing stored) is sent
+        # again as is too, when the wait is short; a longer one is the caller's to wait for.
+        again = (IN_PROGRESS_CODE, "RATE_LIMITED", PAYMENT_UNSETTLED_LIMIT)
+        if e is None or e.get("code") not in again or attempt >= c.max_retries:
             return result
         if isinstance(e.get("retryAfterMs"), (int, float)):
             wait = e["retryAfterMs"] / 1000
@@ -254,13 +266,19 @@ def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> 
     key = idempotency_key
     if not is_idempotency_key(key):
         raise ConfigError("idempotency_key must be 1 to 128 printable ASCII characters")
-    params: dict[str, Any] = {"name": name, "arguments": args, "_meta": {IDEMPOTENCY_META: key}}
+    offered = next((o for o in (sch.payment_schemes() for sch in c.schemes.values()) if o is not None), None)
+    meta: dict[str, Any] = {IDEMPOTENCY_META: key}
+    if offered is not None:
+        meta[PAYMENT_SCHEMES_META] = list(offered)
+    params: dict[str, Any] = {"name": name, "arguments": args, "_meta": meta}
     called_at = math.floor(c.now())
     first = yield from _send(c, params)
     refusal = _assay_error(first)
     if refusal is None:
         return _to_result(first, key)
     requirement = first["_meta"].get(PAYMENT_REQUIRED_META)
+    if refusal["code"] == PAYMENT_DEBT_OUTSTANDING:
+        raise (yield from _debt_error(c, refusal, first))
     if refusal["code"] != PAYMENT_REQUIRED_CODE or requirement is None:
         raise _tool_error(refusal, first)
 
@@ -284,6 +302,7 @@ def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> 
     if not is_tool_name(tool):
         raise PaymentRefusedError("G1", "G1_NOT_FORWARDED", "the paid tool's name is not readable")
     assert isinstance(tool, str)
+    channel_offer = first["_meta"].get(CHANNEL_REQUIRED_META) if offered is not None else None
     prepared = yield from scheme.prepare(
         requirement=requirement,
         tool=tool,
@@ -291,6 +310,7 @@ def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> 
         signer=signer,
         idempotency_key=key,
         quote=lambda t: quote_for(c, t),
+        channel_offer=channel_offer,
     )
     if isinstance(prepared, GuardResult):
         if prepared.code == "G2_NETWORK":
@@ -315,12 +335,61 @@ def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> 
     except Exception as err:
         prepared.release()
         raise PaymentError("SIGNER_FAILED", "the signer did not sign the voucher") from err
-    paid = yield from _send(c, {**params, "_meta": {**params["_meta"], VOUCHER_META: envelope}})
+    try:
+        paid = yield from _send(c, {**params, "_meta": {**params["_meta"], prepared.meta_key: envelope}})
+    except BaseException as err:
+        # No answer: what the server did with the voucher is unknown, so the lane is never reused (its
+        # pair stays renewable). A 4xx refusal of the request was not stored: the pair is dropped too.
+        refused = isinstance(err, AssayError) and err.status is not None and 400 <= err.status < 500
+        with contextlib.suppress(Exception):
+            prepared.finish("retire" if refused else "unknown")
+        raise
     after = _assay_error(paid)
+    code = None if after is None else str(after["code"])
+    if prepared.is_channel:
+        with contextlib.suppress(Exception):
+            prepared.finish(lane_outcome_of(code))
+        # One voucher per logical call: a channel refusal the next call recovers from by itself (a new
+        # lane after CHANNEL_ROTATE; per call while channels pause after CHANNEL_LIMIT and the like) is
+        # raised as retryable, never signed again in this call.
+        if code is not None and channel_fallback_of(code) != "stop":
+            scheme.channel_refused(code)
+            raise PaymentError(
+                code,
+                "the payment channel could not take this payment; call again (nothing was charged)",
+                retryable=True,
+            )
     if after is None:
         return _to_result(paid, key)
-    scheme.on_refused(str(after["code"]), requirement, signer)
+    assert code is not None
+    scheme.on_refused(code, requirement, signer)
+    if code == PAYMENT_DEBT_OUTSTANDING:
+        raise (yield from _debt_error(c, after, paid))
     raise _tool_error(after, paid)
+
+
+def _debt_error(c: Context, e: dict[str, Any], result: dict[str, Any]) -> Flow[AssayError]:
+    """A paid call refused for a buyer debt. When this client keeps channel lanes, the channel debts
+    it signed are renewed once (at most once a minute; within the minute the debts are only listed;
+    the call is not sent again). The error then says what to do (``channel_debt_answer``): being
+    collected (retryable), a channel debt this client can no longer renew (settle in the app once
+    offered), or only channel debts not renewed just now (retryable). With a per-call debt (a person
+    signs it in the portal) it is the server's refusal."""
+    refusal = _tool_error(e, result)
+    try:
+        renewals = yield from renew_channel_debts(c)
+    except Exception:
+        return refusal
+    answer = channel_debt_answer(renewals, c.web_origin)
+    if answer is None:
+        return refusal
+    text, retryable = answer
+    return PaymentError(
+        PAYMENT_DEBT_OUTSTANDING,
+        text,
+        retryable=retryable,
+        details={**(refusal.details or {}), "renewals": renewals or []},
+    )
 
 
 # --- the sync and async faces ---------------------------------------------------------------
