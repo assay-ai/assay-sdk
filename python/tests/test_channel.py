@@ -198,6 +198,41 @@ def test_outcomes() -> None:
         assert lane_outcome_of(c) == "retire"
 
 
+def test_outcomes_spend_policy_refusals_keyed_on_code_and_reason() -> None:
+    vel = "MCP_VELOCITY_LIMIT_EXCEEDED"
+    for r in ("DUPLICATE_REQUEST", "CALLS_PER_MINUTE", "CALLS_PER_HOUR", "SPEND_PER_HOUR"):
+        assert lane_outcome_of(vel, r) == "reuse"
+    for c in ("MCP_SPEND_LIMIT_EXCEEDED", "MCP_POLICY_AGENT_PAUSED", "MCP_APPROVAL_REQUIRED"):
+        assert lane_outcome_of(c) == "reuse"
+        assert lane_outcome_of(c, "anything") == "reuse"
+    # The spend lock may fail after the voucher was stored: never re-armed.
+    assert lane_outcome_of(vel, "UNAVAILABLE") == "retire"
+    for bad in (None, "", "SOMETHING_NEW", "duplicate_request", 5):
+        assert lane_outcome_of(vel, bad) == "retire"
+    # A reason never turns another code into a re-arm.
+    assert lane_outcome_of("CHANNEL_ROTATE", "DUPLICATE_REQUEST") == "retire"
+    # A re-armed refusal drops the refused top pair from the renewable pairs, as any refusal does.
+    for c, r in ((vel, "DUPLICATE_REQUEST"), ("MCP_SPEND_LIMIT_EXCEEDED", None)):
+        lane = {
+            "channelId": "0x" + format(1, "064x"),
+            **V["lanes"]["pool"],
+            "maxSigned": "200000",
+            "callsSigned": 2,
+            "topIncrease": "100000",
+            "lastIssuedAt": 1000,
+            "lastExpiresAt": 1240,
+            "reuseTop": False,
+            "inFlightSince": 1000,
+            "retired": False,
+            "checkedAt": None,
+            "renewable": [["100000", 1], ["200000", 2]],
+        }
+        done = finish_lane({"version": 1, "lanes": [lane]}, lane["channelId"], lane_outcome_of(c, r))["lanes"][0]
+        assert done["reuseTop"] is True
+        assert done["retired"] is False
+        assert [list(p) for p in done["renewable"]] == [["100000", 1]]
+
+
 def test_offer_valid() -> None:
     o = V["offers"]
     r = check_channel_offer(o["offer"], o["requirement"], o["network"])
@@ -475,6 +510,41 @@ def test_other_refusal_retires_the_lane() -> None:
     with pytest.raises(AssayError) as err:
         client.tools.call(TOOL, {})
     assert err.value.code == "CHANNEL_DESYNC"
+    client.tools.call(TOOL, {})
+    s = sent(fake)
+    assert pairs(fake)[1] == ("100000", 1)
+    assert s[1]["voucher"]["channelId"] != s[0]["voucher"]["channelId"]
+
+
+def test_duplicate_request_rearms_the_lane_and_the_retry_signs_the_same_pair() -> None:
+    def answer(_e: Any, i: int) -> Any:
+        if i == 1:
+            return refusal("MCP_VELOCITY_LIMIT_EXCEEDED", reason="DUPLICATE_REQUEST", retryAfter=19)
+        return None
+
+    fake = Fake(mcp=channel_tool(answer))
+    client = channel_client(fake)
+    client.tools.call(TOOL, {})
+    with pytest.raises(AssayError) as err:
+        client.tools.call(TOOL, {})
+    assert err.value.code == "MCP_VELOCITY_LIMIT_EXCEEDED"
+    client.tools.call(TOOL, {})
+    s = sent(fake)
+    assert pairs(fake) == [("100000", 1), ("200000", 2), ("200000", 2)]
+    assert {e["voucher"]["channelId"] for e in s} == {s[0]["voucher"]["channelId"]}
+
+
+def test_velocity_unavailable_retires_the_lane() -> None:
+    def answer(_e: Any, i: int) -> Any:
+        if i == 0:
+            return refusal("MCP_VELOCITY_LIMIT_EXCEEDED", reason="UNAVAILABLE", retryAfter=1)
+        return None
+
+    fake = Fake(mcp=channel_tool(answer))
+    client = channel_client(fake)
+    with pytest.raises(AssayError) as err:
+        client.tools.call(TOOL, {})
+    assert err.value.code == "MCP_VELOCITY_LIMIT_EXCEEDED"
     client.tools.call(TOOL, {})
     s = sent(fake)
     assert pairs(fake)[1] == ("100000", 1)

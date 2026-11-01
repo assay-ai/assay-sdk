@@ -88,8 +88,9 @@ export const CHANNEL_CODES = Object.freeze({
  * What to do with a lane after the server answered a channel voucher:
  * - `served`: admitted (or replayed); the lane is free again;
  * - `reuse`: refused without storing the voucher (`PAYMENT_UNSETTLED_LIMIT`, `PAYMENT_DEBT_OUTSTANDING`,
- *   `CHANNEL_LIMIT`, `CHANNEL_SIGNER_EXPIRING`, `CHANNEL_NOT_OFFERED`): the lane is free, and its next voucher signs
- *   the same top pair again (no increase);
+ *   `CHANNEL_LIMIT`, `CHANNEL_SIGNER_EXPIRING`, `CHANNEL_NOT_OFFERED`, and the spend-policy refusals of
+ *   {@link SPEND_POLICY_NOT_STORED}): the lane is free, and its next voucher signs the same top pair again (no
+ *   increase);
  * - `retire`: `CHANNEL_ROTATE` or any other refusal: the lane is never used again;
  * - `unknown`: no answer (or the lane was never reported): retired as well, but the pair may have
  *   been stored, so it stays renewable.
@@ -99,9 +100,35 @@ export const CHANNEL_CODES = Object.freeze({
  */
 export type LaneOutcome = "served" | "reuse" | "retire" | "unknown";
 
-/** The outcome for a server answer to a channel voucher: `null` error code is served. */
-export function laneOutcomeOf(code: string | null): LaneOutcome {
+/**
+ * The spend-policy refusals the server makes before the channel voucher is stored (its spend-policy
+ * check runs before the channel admission): `code` mapped to the `assay/error` `reason`s that are
+ * pre-store, or `null` when every reason of that code is. `MCP_VELOCITY_LIMIT_EXCEEDED` with reason
+ * `UNAVAILABLE` (the spend lock) can also come after the store, so it is not listed, nor is any
+ * other or missing reason: those retire the lane.
+ */
+export const SPEND_POLICY_NOT_STORED: Readonly<Record<string, readonly string[] | null>> = Object.freeze({
+  MCP_VELOCITY_LIMIT_EXCEEDED: Object.freeze([
+    "DUPLICATE_REQUEST",
+    "CALLS_PER_MINUTE",
+    "CALLS_PER_HOUR",
+    "SPEND_PER_HOUR",
+  ]),
+  MCP_SPEND_LIMIT_EXCEEDED: null,
+  MCP_POLICY_AGENT_PAUSED: null,
+  MCP_APPROVAL_REQUIRED: null,
+});
+
+/**
+ * The outcome for a server answer to a channel voucher: `null` error code is served. `reason` is
+ * the `assay/error` `reason`, which tells a pre-store velocity refusal from one that may not be.
+ */
+export function laneOutcomeOf(code: string | null, reason?: unknown): LaneOutcome {
   if (code === null) return "served";
+  const reasons = Object.hasOwn(SPEND_POLICY_NOT_STORED, code) ? SPEND_POLICY_NOT_STORED[code] : undefined;
+  if (reasons !== undefined) {
+    return reasons === null || (typeof reason === "string" && reasons.includes(reason)) ? "reuse" : "retire";
+  }
   if (
     code === CHANNEL_CODES.PAYMENT_UNSETTLED_LIMIT ||
     // A buyer debt refuses the call before anything is stored: the lane is re-armed.

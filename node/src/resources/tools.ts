@@ -348,7 +348,7 @@ export class Tools {
     const after = assayErrorOf(paid);
     const code = after === null ? null : (after.code as string);
     if (prepared.finish) {
-      await prepared.finish(laneOutcomeOf(code)).catch(() => undefined);
+      await prepared.finish(laneOutcomeOf(code, after?.reason)).catch(() => undefined);
       // One voucher per logical call: a channel refusal the next call recovers from by itself (a new
       // lane after CHANNEL_ROTATE; per call while channels pause after CHANNEL_LIMIT and the like) is
       // thrown as retryable, never signed again in this call.

@@ -348,7 +348,7 @@ def _call(c: Context, name: str, args: dict[str, Any], idempotency_key: str) -> 
     code = None if after is None else str(after["code"])
     if prepared.is_channel:
         with contextlib.suppress(Exception):
-            prepared.finish(lane_outcome_of(code))
+            prepared.finish(lane_outcome_of(code, None if after is None else after.get("reason")))
         # One voucher per logical call: a channel refusal the next call recovers from by itself (a new
         # lane after CHANNEL_ROTATE; per call while channels pause after CHANNEL_LIMIT and the like) is
         # raised as retryable, never signed again in this call.

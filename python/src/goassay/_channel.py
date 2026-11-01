@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, NoReturn
 
 from eth_utils.address import is_checksum_address, to_checksum_address
@@ -84,6 +85,21 @@ _NOT_STORED = {
     CHANNEL_SIGNER_EXPIRING,
     CHANNEL_NOT_OFFERED,
 }
+# The spend-policy refusals the server makes before the channel voucher is stored (its spend-policy
+# check runs before the channel admission): code -> the ``assay/error`` reasons that are pre-store,
+# or None when every reason of that code is. MCP_VELOCITY_LIMIT_EXCEEDED with reason UNAVAILABLE (the
+# spend lock) can also come after the store, so it is not listed, nor is any other or missing reason:
+# those retire the lane.
+SPEND_POLICY_NOT_STORED: Mapping[str, frozenset[str] | None] = MappingProxyType(
+    {
+        "MCP_VELOCITY_LIMIT_EXCEEDED": frozenset(
+            {"DUPLICATE_REQUEST", "CALLS_PER_MINUTE", "CALLS_PER_HOUR", "SPEND_PER_HOUR"}
+        ),
+        "MCP_SPEND_LIMIT_EXCEEDED": None,
+        "MCP_POLICY_AGENT_PAUSED": None,
+        "MCP_APPROVAL_REQUIRED": None,
+    }
+)
 _UINT = re.compile(r"0|[1-9][0-9]*")
 _CHANNEL_ID = re.compile(r"0x[0-9a-f]{64}")
 _CAIP2 = re.compile(r"eip155:[1-9][0-9]*")
@@ -108,15 +124,20 @@ _LANE_KEYS = (
 )
 
 
-def lane_outcome_of(code: str | None) -> str:
+def lane_outcome_of(code: str | None, reason: object = None) -> str:
     """``served`` (admitted or replayed), ``reuse`` (refused without storing the voucher: sign the
-    same top pair again next time) or ``retire`` (``CHANNEL_ROTATE``, any other refusal). With no
+    same top pair again next time) or ``retire`` (``CHANNEL_ROTATE``, any other refusal). ``reason``
+    is the ``assay/error`` ``reason``: a spend-policy refusal re-arms the lane only for the code and
+    reason pairs of ``SPEND_POLICY_NOT_STORED``. With no
     answer the caller reports ``unknown``: retired as well, but the pair may have been stored, so it
     stays renewable. Only ``served`` and ``unknown`` keep the top pair renewable: after an explicit
     refusal the server did not store the voucher, and a renew of it would authorise a call never
     served."""
     if code is None:
         return "served"
+    if code in SPEND_POLICY_NOT_STORED:
+        reasons = SPEND_POLICY_NOT_STORED[code]
+        return "reuse" if reasons is None or (isinstance(reason, str) and reason in reasons) else "retire"
     return "reuse" if code in _NOT_STORED else "retire"
 
 

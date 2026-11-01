@@ -458,6 +458,7 @@ under the domain of section 6.1. The field order is part of the type hash. The s
 | `CHANNEL_ROTATE` | retired | reports a retryable error; the next call opens a new lane. Five rotations within an hour stop channel offers for an hour |
 | `CHANNEL_LIMIT`, `CHANNEL_SIGNER_EXPIRING`, `CHANNEL_NOT_OFFERED` | re-armed | reports a retryable error and offers no channel for an hour (calls are paid per call meanwhile) |
 | `PAYMENT_DEBT_OUTSTANDING` | re-armed | renews the channel debts it signed (section 12.6) once, then reports it |
+| a spend-policy refusal made before the voucher is stored: `MCP_VELOCITY_LIMIT_EXCEEDED` with `reason` `DUPLICATE_REQUEST`, `CALLS_PER_MINUTE`, `CALLS_PER_HOUR` or `SPEND_PER_HOUR`; `MCP_SPEND_LIMIT_EXCEEDED`; `MCP_POLICY_AGENT_PAUSED`; `MCP_APPROVAL_REQUIRED` | re-armed | reports it. `MCP_VELOCITY_LIMIT_EXCEEDED` with any other `reason` (`UNAVAILABLE`: the spend lock, which may fail after the store) or none is "any other refusal" |
 | any other refusal | retired | reports it |
 | no answer | retired (its pair stays renewable: it may have been stored) | reports it |
 

@@ -265,6 +265,49 @@ describe("channel.json: lanes", () => {
     for (const c of ["CHANNEL_ROTATE", "CHANNEL_DESYNC", "PAYMENT_VOUCHER_EXPIRED", "SOMETHING_NEW"])
       expect(laneOutcomeOf(c)).toBe("retire");
   });
+
+  it("outcomes: the pre-store spend-policy refusals re-arm, keyed on code and reason", () => {
+    const V_LANES = V.lanes;
+    const VEL = "MCP_VELOCITY_LIMIT_EXCEEDED";
+    for (const r of ["DUPLICATE_REQUEST", "CALLS_PER_MINUTE", "CALLS_PER_HOUR", "SPEND_PER_HOUR"])
+      expect(laneOutcomeOf(VEL, r)).toBe("reuse");
+    for (const c of ["MCP_SPEND_LIMIT_EXCEEDED", "MCP_POLICY_AGENT_PAUSED", "MCP_APPROVAL_REQUIRED"]) {
+      expect(laneOutcomeOf(c)).toBe("reuse");
+      expect(laneOutcomeOf(c, "anything")).toBe("reuse");
+    }
+    // The spend lock may fail after the voucher was stored: never re-armed.
+    expect(laneOutcomeOf(VEL, "UNAVAILABLE")).toBe("retire");
+    for (const r of [undefined, null, "", "SOMETHING_NEW", "duplicate_request", 5])
+      expect(laneOutcomeOf(VEL, r)).toBe("retire");
+    // A reason never turns another code into a re-arm.
+    expect(laneOutcomeOf("CHANNEL_ROTATE", "DUPLICATE_REQUEST")).toBe("retire");
+    expect(laneOutcomeOf("toString")).toBe("retire");
+    // A re-armed refusal drops the refused top pair from the renewable pairs, as any refusal does.
+    for (const [c, r] of [
+      [VEL, "DUPLICATE_REQUEST"],
+      ["MCP_SPEND_LIMIT_EXCEEDED", undefined],
+    ] as const) {
+      const lane = {
+        channelId: `0x${"1".padStart(64, "0")}` as Hex,
+        ...(V_LANES.pool as LanePool),
+        maxSigned: "200000",
+        callsSigned: 2,
+        topIncrease: "100000",
+        lastIssuedAt: 1000,
+        lastExpiresAt: 1240,
+        reuseTop: false,
+        inFlightSince: 1000,
+        retired: false,
+        checkedAt: null,
+        renewable: [
+          ["100000", 1],
+          ["200000", 2],
+        ] as [string, number][],
+      };
+      const done = finishLane({ ...emptyBook(), lanes: [lane] }, lane.channelId, laneOutcomeOf(c, r)).lanes[0]!;
+      expect(done).toMatchObject({ reuseTop: true, retired: false, renewable: [["100000", 1]] });
+    }
+  });
 });
 
 describe("channel.json: the server's offer", () => {
@@ -559,6 +602,38 @@ describe("client: channel lane", () => {
     });
     await expect(client.tools.call(TOOL, {})).rejects.toBeInstanceOf(PaymentUnsettledLimitError);
     now += (240 + 7201) * 1000;
+    await client.tools.call(TOOL, {});
+    const sent = channelSent(calls);
+    expect(sent[1]!.voucher.channelId).not.toBe(sent[0]!.voucher.channelId);
+    expect(sent[1]!.voucher).toMatchObject({ cumulative: "100000", calls: 1 });
+  });
+
+  it("a DUPLICATE_REQUEST refusal re-arms the lane: the retry signs the same pair on the same lane", async () => {
+    const { client, calls } = channelClient({
+      mcp: channelTool({
+        answer: (_e, n) =>
+          n === 1 ? refusal("MCP_VELOCITY_LIMIT_EXCEEDED", { reason: "DUPLICATE_REQUEST", retryAfter: 19 }) : undefined,
+      }),
+    });
+    await client.tools.call(TOOL, {});
+    await expect(client.tools.call(TOOL, {})).rejects.toMatchObject({ code: "MCP_VELOCITY_LIMIT_EXCEEDED" });
+    await client.tools.call(TOOL, {});
+    const sent = channelSent(calls);
+    expect(sent.map((e) => [e.voucher.channelId, e.voucher.cumulative, e.voucher.calls])).toEqual([
+      [sent[0]!.voucher.channelId, "100000", 1],
+      [sent[0]!.voucher.channelId, "200000", 2],
+      [sent[0]!.voucher.channelId, "200000", 2],
+    ]);
+  });
+
+  it("a velocity refusal with reason UNAVAILABLE retires the lane (it may come after the store)", async () => {
+    const { client, calls } = channelClient({
+      mcp: channelTool({
+        answer: (_e, n) =>
+          n === 0 ? refusal("MCP_VELOCITY_LIMIT_EXCEEDED", { reason: "UNAVAILABLE", retryAfter: 1 }) : undefined,
+      }),
+    });
+    await expect(client.tools.call(TOOL, {})).rejects.toMatchObject({ code: "MCP_VELOCITY_LIMIT_EXCEEDED" });
     await client.tools.call(TOOL, {});
     const sent = channelSent(calls);
     expect(sent[1]!.voucher.channelId).not.toBe(sent[0]!.voucher.channelId);
