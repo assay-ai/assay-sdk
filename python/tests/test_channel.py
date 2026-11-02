@@ -212,7 +212,7 @@ def test_outcomes_spend_policy_refusals_keyed_on_code_and_reason() -> None:
     # A reason never turns another code into a re-arm.
     assert lane_outcome_of("CHANNEL_ROTATE", "DUPLICATE_REQUEST") == "retire"
     # A re-armed refusal drops the refused top pair from the renewable pairs, as any refusal does.
-    for c, r in ((vel, "DUPLICATE_REQUEST"), ("MCP_SPEND_LIMIT_EXCEEDED", None)):
+    for code, reason in ((vel, "DUPLICATE_REQUEST"), ("MCP_SPEND_LIMIT_EXCEEDED", None)):
         lane = {
             "channelId": "0x" + format(1, "064x"),
             **V["lanes"]["pool"],
@@ -227,7 +227,8 @@ def test_outcomes_spend_policy_refusals_keyed_on_code_and_reason() -> None:
             "checkedAt": None,
             "renewable": [["100000", 1], ["200000", 2]],
         }
-        done = finish_lane({"version": 1, "lanes": [lane]}, lane["channelId"], lane_outcome_of(c, r))["lanes"][0]
+        outcome = lane_outcome_of(code, reason)
+        done = finish_lane({"version": 1, "lanes": [lane]}, lane["channelId"], outcome)["lanes"][0]
         assert done["reuseTop"] is True
         assert done["retired"] is False
         assert [list(p) for p in done["renewable"]] == [["100000", 1]]
