@@ -2,9 +2,9 @@
 
 All notable changes to `@goassay-ai/sdk` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
-## Unreleased
+## 1.1.0 - 2026-11-02
 
-Additive and off by default: nothing changes for code written against 1.0.0. Not to be released before the escrow's channel door (assay-evm W1) and the backend's channel lane (W2) are live on a network.
+Additive and off by default: nothing changes for code written against 1.0.0. Channel vouchers are used only on a network entry that says `channels: true` (none of the built-in ones in this release) and only when the server offers a channel.
 
 ### Added
 
