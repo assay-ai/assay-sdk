@@ -13,6 +13,10 @@ wrongly.
   when the process ended can then no longer be renewed by this client (``not_signed_here``): a person
   settles it in the Assay app once offered there.
 
+Without ``channels=`` the client uses ``default_channel_store(address)``: a ``FileChannelStore`` at
+``default_channel_store_path(address)`` (one file per signing key, the same file and lock as the Node
+client). A runtime without a durable file system (Pyodide in a browser) must pass ``channels=``.
+
 A store never repairs or resets a damaged record: reading it fails, and the client then pays per call
 (never by channel) until a person fixes or removes the file.
 """
@@ -23,6 +27,7 @@ import atexit
 import contextlib
 import json
 import os
+import re
 import secrets
 import sys
 import threading
@@ -203,3 +208,44 @@ class FileChannelStore:
             os.fsync(f.fileno())
         os.replace(tmp, self._path)
         _sync_dir(self._path.parent)
+
+
+# The config folder name of the SDK under the platform's per-user config folder.
+SDK_DIR_NAME = "goassay"
+
+
+def default_channel_store_path(
+    address: str, home: str | os.PathLike[str] | None = None, platform: str | None = None
+) -> Path:
+    """The default lane file for a signing key: ``{config}/goassay/channels/{address}.json``, where
+    ``{config}`` is ``~/Library/Application Support`` (macOS), ``~\\AppData\\Roaming`` (Windows) or
+    ``~/.config`` (other systems), and ``{address}`` is the key's address in lower case. The Node client
+    uses the same file, with the same lock."""
+    if not isinstance(address, str) or not re.fullmatch(r"0x[0-9a-fA-F]{40}", address):
+        raise ConfigError("the signer address is not an EVM address")
+    base = Path(home) if home is not None else Path.home()
+    plat = platform if platform is not None else sys.platform
+    if plat == "win32":
+        config = base / "AppData" / "Roaming"
+    elif plat == "darwin":
+        config = base / "Library" / "Application Support"
+    else:
+        config = base / ".config"
+    return config / SDK_DIR_NAME / "channels" / f"{address.lower()}.json"
+
+
+def default_channel_store(address: str) -> FileChannelStore:
+    """The store a client uses when it is given no ``channels=``: a ``FileChannelStore`` at
+    ``default_channel_store_path(address)``. Raises ``ConfigError`` on a runtime without a durable
+    file system or home folder: lanes must survive a restart, so the caller passes ``channels=`` there."""
+    if sys.platform == "emscripten":
+        reason = "Pyodide"
+    else:
+        try:
+            return FileChannelStore(default_channel_store_path(address))
+        except RuntimeError:  # Path.home() when no home folder can be found
+            reason = "this runtime without a home folder"
+    raise ConfigError(
+        f"channel vouchers need a durable store for their lanes and {reason} has none: "
+        "pass channels= (a store you keep durable)"
+    )

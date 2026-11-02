@@ -195,7 +195,7 @@ def renew_debts(c: Context) -> Flow[list[DebtRenewal]]:
         raise ConfigError("renew_channel_debts() needs an eip155 signer")
     out = yield from renew_channel_debts(c)
     if out is None:
-        raise ConfigError("renew_channel_debts() needs the channels option (a lane store)")
+        raise ConfigError("renew_channel_debts() needs a lane store")
     return out
 
 

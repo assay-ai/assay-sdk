@@ -488,10 +488,9 @@ def test_not_a_new_spend() -> None:
     assert err.value.code == "G7_PER_DAY"
 
 
-def test_needs_channels_and_a_signer() -> None:
+def test_needs_a_signer_and_uses_the_default_lane_file_without_channels() -> None:
     s = Server()
-    with pytest.raises(ConfigError):
-        s.client(channels=False).paid_calls.renew_channel_debts()
+    assert isinstance(s.client(channels=False).paid_calls.renew_channel_debts(), list)
     with pytest.raises(ConfigError):
         s.fake.client(with_signer=False, channels=MemoryChannelStore()).paid_calls.renew_channel_debts()
 
@@ -672,13 +671,13 @@ def test_per_call_debts_keep_their_behaviour() -> None:
     assert all_debts_collecting([]) is False
 
 
-def test_without_a_lane_store_nothing_is_listed() -> None:
+def test_without_channels_a_fresh_default_lane_file_signs_nothing_for_a_debt() -> None:
     s = Server()
     client = s.client(channels=False)
     s.owes = True
     with pytest.raises(PaymentError):
         client.tools.call(TOOL, {})
-    assert s.lists() == []
+    assert s.posts() == []
 
 
 def test_async_client_renews_too() -> None:

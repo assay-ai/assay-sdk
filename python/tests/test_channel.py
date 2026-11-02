@@ -6,6 +6,7 @@ import asyncio
 import copy
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +30,8 @@ from goassay._channel import (
     unpack_channel_state,
 )
 from goassay._errors import SignerRefusal
-from goassay.channels import take_lock
-from goassay.errors import AssayError, PaymentError, PaymentRefusedError
+from goassay.channels import default_channel_store, default_channel_store_path, take_lock
+from goassay.errors import AssayError, ConfigError, PaymentError, PaymentRefusedError
 
 from .fake import (
     BASE,
@@ -329,15 +330,18 @@ def channel_client(fake: Fake, store: Any = None, **kw: Any) -> Any:
     return fake.client(networks=CHANNEL_NETWORKS, channels=store or MemoryChannelStore(), **kw)
 
 
-def test_offers_channel_v1_only_with_a_store_and_a_capable_network() -> None:
+def test_offers_channel_v1_always_and_signs_one_only_on_a_channel_network() -> None:
+    # The built-in mainnet entry has the channel door, so every client with a signer offers channel-v1;
+    # on a network whose own entry does not say "channels": True it still signs per call only.
     plain = Fake(mcp=channel_tool())
     plain.client().tools.call(TOOL, {})
-    assert all("assay/paymentSchemes" not in meta_of(s) for s in plain.calls())
+    assert meta_of(plain.calls()[0])["assay/paymentSchemes"] == ["channel-v1", "voucher"]
     assert sent(plain) == []
+    assert any("assay/voucher" in meta_of(s) for s in plain.calls())
 
     not_capable = Fake(mcp=channel_tool())
     not_capable.client(channels=MemoryChannelStore()).tools.call(TOOL, {})
-    assert all("assay/paymentSchemes" not in meta_of(s) for s in not_capable.calls())
+    assert sent(not_capable) == []
 
     on = Fake(mcp=channel_tool())
     channel_client(on).tools.call(TOOL, {})
@@ -709,3 +713,39 @@ def test_a_second_process_is_kept_off_the_file(tmp_path: Path) -> None:
     (tmp_path / "lanes.json.lock").write_text("1")  # pid 1 is always alive
     with pytest.raises(AssayError, match="another process"):
         FileChannelStore(path).load()
+
+
+# --- default lane store ---------------------------------------------------------------------
+
+
+def test_default_lane_file_under_the_home_folder(fresh_home: Path) -> None:
+    fake = Fake(mcp=channel_tool())
+    fake.client(networks=CHANNEL_NETWORKS).tools.call(TOOL, {})
+    assert len(sent(fake)) == 1
+    files = list(fresh_home.rglob("*.json"))
+    assert len(files) == 1
+    path = files[0]
+    assert path.parent.name == "channels" and path.parent.parent.name == "goassay"
+    assert path.name == path.name.lower() and path.name.startswith("0x")
+    assert len(json.loads(path.read_text())["lanes"]) == 1
+    if sys.platform != "win32":
+        assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_default_lane_path_per_platform() -> None:
+    a = "0x00000000000000000000000000000000000000Ab"
+    name = "0x00000000000000000000000000000000000000ab.json"
+    assert default_channel_store_path(a, "/home/u", "linux") == Path("/home/u/.config/goassay/channels") / name
+    assert (
+        default_channel_store_path(a, "/Users/u", "darwin")
+        == Path("/Users/u/Library/Application Support/goassay/channels") / name
+    )
+    assert default_channel_store_path(a, "/h", "win32") == Path("/h/AppData/Roaming/goassay/channels") / name
+    with pytest.raises(ConfigError):
+        default_channel_store_path("not-an-address", "/home/u", "linux")
+
+
+def test_pyodide_needs_an_explicit_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "emscripten")
+    with pytest.raises(ConfigError, match="pass channels="):
+        default_channel_store("0x00000000000000000000000000000000000000Ab")

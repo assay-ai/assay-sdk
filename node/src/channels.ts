@@ -13,6 +13,10 @@
  *   process ended can then no longer be renewed by this client (`not_signed_here`): a person
  *   settles it in the Assay app once offered there.
  *
+ * Without a `channels` option the client uses {@link defaultChannelStore}: a file store at
+ * {@link defaultChannelStorePath} (one file per signing key). A runtime without a file system
+ * (a Cloudflare Worker, an edge function, a browser) must pass `channels: { store }`.
+ *
  * A store never repairs or resets a damaged record: reading it fails, and the client then pays
  * per call (never by channel) until the file is fixed or removed by a person.
  */
@@ -30,7 +34,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, dirname, join, resolve, win32 } from "node:path";
 import { ConfigError } from "./errors.js";
 import type { ChannelBook } from "./core/channel.js";
 
@@ -230,4 +235,61 @@ export function fileChannelStore(path: string): ChannelStore {
       syncDir(dirname(path));
     },
   };
+}
+
+/** The config folder name of the SDK under the platform's per-user config folder. */
+export const SDK_DIR_NAME = "goassay";
+
+/**
+ * The default lane file for a signing key: `{config}/goassay/channels/{address}.json`, where
+ * `{config}` is `~/Library/Application Support` (macOS), `%USERPROFILE%\AppData\Roaming`
+ * (Windows) or `~/.config` (other systems), and `{address}` is the key's address in lower case.
+ * The Python client uses the same file, with the same lock.
+ */
+export function defaultChannelStorePath(
+  address: string,
+  home: string = homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) throw new ConfigError("the signer address is not an EVM address");
+  const name = `${address.toLowerCase()}.json`;
+  if (platform === "win32") return win32.join(home, "AppData", "Roaming", SDK_DIR_NAME, "channels", name);
+  const base = platform === "darwin" ? join(home, "Library", "Application Support") : join(home, ".config");
+  return join(base, SDK_DIR_NAME, "channels", name);
+}
+
+/** Why this runtime has no durable file system for lanes, or `null` when it has one. */
+export function noFileSystemReason(
+  g: Record<string, unknown> = globalThis as unknown as Record<string, unknown>,
+): string | null {
+  const nav = g.navigator as { userAgent?: unknown } | undefined;
+  if (nav?.userAgent === "Cloudflare-Workers") return "a Cloudflare Worker";
+  if (g.EdgeRuntime !== undefined) return "an edge runtime";
+  if (g.window !== undefined && g.document !== undefined) return "a browser";
+  const proc = g.process as { versions?: { node?: unknown } } | undefined;
+  if (typeof proc?.versions?.node !== "string") return "a runtime without Node's file system";
+  return null;
+}
+
+/**
+ * The store a client uses when it is given no `channels` option: {@link fileChannelStore} at
+ * {@link defaultChannelStorePath} for the key. Throws `ConfigError` on a runtime without a durable
+ * file system: lanes must survive a restart, so the caller passes `channels: { store }` there.
+ */
+export function defaultChannelStore(address: string): ChannelStore {
+  const reason = noFileSystemReason();
+  let home = "";
+  if (reason === null) {
+    try {
+      home = homedir();
+    } catch {
+      home = "";
+    }
+  }
+  if (reason !== null || home === "") {
+    throw new ConfigError(
+      `channel vouchers need a durable store for their lanes and ${reason ?? "this runtime has no home folder"} has none: pass channels: { store } (a store you keep durable)`,
+    );
+  }
+  return fileChannelStore(defaultChannelStorePath(address, home));
 }

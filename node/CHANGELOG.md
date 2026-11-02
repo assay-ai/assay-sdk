@@ -2,6 +2,17 @@
 
 All notable changes to `@goassay-ai/sdk` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
+## 1.2.0 - 2026-11-02
+
+Channels are now used by default; a lane file is created at `~/Library/Application Support/goassay/channels/<address>.json` (macOS), `~/.config/goassay/channels/<address>.json` (Linux and other systems) or `%USERPROFILE%\AppData\Roaming\goassay\channels\<address>.json` (Windows), one file per signing key (`<address>` in lower case, mode 0600, with a `.lock` file next to it). The same file and lock are used by the Node and Python clients.
+
+### Changed
+
+- **Channel vouchers always on.** Every client with an eip155 signer now offers `assay/paymentSchemes: ["channel-v1", "voucher"]` and signs a channel voucher when the server offers a channel on a network whose entry says `channels: true`. There is no option to turn channels off. `channels: { store }` now only chooses where the lanes are kept; without it the default lane file above is used (`defaultChannelStorePath(address)` / `defaultChannelStore(address)`). A runtime without a durable file system (a Cloudflare Worker, an edge function, a browser) must pass `channels: { store }`: the client throws `ConfigError` at construction otherwise.
+- **Built-in mainnet entry has the channel door.** The built-in `eip155:4663` entry now says `channels: true`. An entry of your own (`networks`, for example Robinhood Chain testnet, which is not built in) replaces the built-in one whole and must say `channels: true` itself to use channels.
+- One process per lane file: a second process on the same signing key cannot take the lock and pays per call; give it its own store with `channels: { store }` to use channels there too.
+- A call still pays per call when no channel can be used: the server offers none, channels are paused for an hour after `CHANNEL_LIMIT`, `CHANNEL_SIGNER_EXPIRING`, `CHANNEL_NOT_OFFERED` or a burst of `CHANNEL_ROTATE`, the offer does not match the requirement or the client's own entry, the lane record cannot be read or written, or the chain read of a lane is not agreed.
+
 ## 1.1.0 - 2026-11-02
 
 Additive and off by default: nothing changes for code written against 1.0.0. Channel vouchers are used only on a network entry that says `channels: true` (none of the built-in ones in this release) and only when the server offers a channel.

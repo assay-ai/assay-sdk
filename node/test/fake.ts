@@ -2,7 +2,9 @@
  * A fake transport for the unit tests: one `fetch` that answers the MCP endpoint, the REST API and
  * a chain RPC from the guard vectors' base context. Nothing leaves the process.
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { keccak256, toBytes, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -12,6 +14,14 @@ import { Assay, evmSigner, type AssayOptions } from "../src/index.js";
 const DIR = fileURLToPath(new URL("../../vectors/eip155/", import.meta.url));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const load = (name: string): any => JSON.parse(readFileSync(`${DIR}${name}`, "utf8"));
+
+/** A fresh home folder for this test, so the default lane file of a client is its own. */
+export function useFreshHome(): string {
+  const home = mkdtempSync(join(tmpdir(), "goassay-home-"));
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  return home;
+}
 
 export const GUARDS = load("guards.json");
 export const BASE = GUARDS.base;

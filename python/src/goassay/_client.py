@@ -24,7 +24,7 @@ from goassay._ops import CallOp, Flow, HttpOp, HttpResult, SleepOp
 from goassay._paid_calls import AsyncPaidCalls, PaidCalls
 from goassay._receipts import AsyncReceipts, Receipts
 from goassay._tools import AsyncTools, Tools
-from goassay.channels import ChannelStore
+from goassay.channels import ChannelStore, default_channel_store
 from goassay.errors import ConfigError, NetworkError, TimeoutError
 from goassay.signers import EvmSigner, Signer
 
@@ -111,15 +111,17 @@ def _build_context(
         max_retries=max_retries,
         now=now,
     )
-    if any(s.namespace == "eip155" for s in all_signers):
+    evm = next((s for s in all_signers if s.namespace == "eip155"), None)
+    if evm is not None:
+        store = channels if channels is not None else default_channel_store(evm.address)
         ctx.schemes["eip155"] = Eip155Scheme(
             networks=table,
             limits=check_limits(limits or DEFAULT_LIMITS),
             chain=ChainReader(now),
             now=now,
             date_offset=lambda: http.date_offset,
-            channel_store=channels,
-            random_channel_id=(lambda: "0x" + secrets.token_hex(32)) if channels is not None else None,
+            channel_store=store,
+            random_channel_id=lambda: "0x" + secrets.token_hex(32),
         )
     return ctx
 
@@ -169,11 +171,14 @@ class Assay(_Base):
     rpcUrls), merged over the SDK's built-in table: a new network is added, and an entry for a
     built-in network replaces it whole. ``rpc_urls=`` sets your own RPC URLs for a network.
 
-    ``channels=`` turns on channel vouchers (``channel-v1``) with a store for the lanes, such as
-    ``FileChannelStore(path)`` (one process per file): one cumulative voucher per lane instead of one
-    per call, on networks whose entry says ``"channels": True`` (none of the built-in ones yet). Off
-    by default. The spend limits count only what each voucher adds, and a lane is checked against
-    the escrow's own record on chain before it is continued.
+    Channel vouchers (``channel-v1``, one cumulative voucher per lane instead of one per call) are
+    always used on networks whose entry says ``"channels": True`` (the built-in mainnet entry does)
+    when the server offers a channel. ``channels=`` sets the store for the lanes, such as
+    ``FileChannelStore(path)``; without it the lanes are kept in
+    ``default_channel_store_path(address)`` (one file per signing key under the user's config
+    folder; one process per file: a second process on the same key pays per call). The spend
+    limits count only what each voucher adds, and a lane is checked against the escrow's own
+    record on chain before it is continued.
     """
 
     def __init__(

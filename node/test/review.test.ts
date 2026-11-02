@@ -174,6 +174,9 @@ describe("networks: pinned in the SDK, never read from the server", () => {
     expect(n.escrow).toBe("eip155:4663:0xe54E0142b1D0d34226498D563A16074C81Bc9A5e");
     expect(n.asset).toBe("eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168");
     expect(n.decimals).toBe(6);
+    // Channels are on for mainnet (still used only by a client given `channels: { store }`).
+    expect(n.channels).toBe(true);
+    expect(networkTable(undefined, undefined).get("eip155:4663")!.channels).toBe(true);
     // The vector signed for this escrow carries its on-chain DOMAIN_SEPARATOR().
     const vectors = JSON.parse(
       readFileSync(new URL("../../vectors/eip155/vouchers.json", import.meta.url), "utf8"),

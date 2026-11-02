@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { inspect } from "node:util";
-import type { ChannelStore } from "./channels.js";
+import { defaultChannelStore, type ChannelStore } from "./channels.js";
 import { ChainReader } from "./core/chain.js";
 import { ConfigError } from "./errors.js";
 import { Http, silentLogger, type FetchLike, type Logger } from "./http.js";
@@ -58,12 +58,14 @@ export interface AssayOptions {
   /** Called before each voucher is signed, after every local check passed. Return `false` to refuse. */
   onPayment?: OnPayment;
   /**
-   * Channel vouchers (`channel-v1`): one cumulative voucher per lane instead of one voucher per
-   * call, on networks whose entry says `channels: true` (none of the built-in ones yet). Off by
-   * default: without this option every paid call is signed per call, as before. `store` keeps
-   * the lanes between runs (`fileChannelStore(path)`; one process per file). The spend limits
-   * count only what each voucher adds, and a lane is checked against the escrow's own record on
-   * chain before it is continued.
+   * Where the channel lanes are kept. Channel vouchers (`channel-v1`, one cumulative voucher per
+   * lane instead of one voucher per call) are always used on networks whose entry says
+   * `channels: true` (the built-in mainnet entry does) when the server offers a channel. Without
+   * this option the lanes are kept in `defaultChannelStorePath(address)` (one file per signing
+   * key, under the user's config folder; one process per file: a second process on the same key
+   * pays per call). A runtime without a file system (a Cloudflare Worker, a browser) must pass a
+   * store, or the client throws `ConfigError`. The spend limits count only what each voucher adds,
+   * and a lane is checked against the escrow's own record on chain before it is continued.
    */
   channels?: { store: ChannelStore };
   /** Default: the global `fetch`. */
@@ -204,7 +206,9 @@ function buildContext(options: AssayOptions): ClientContext {
   });
   const networks = networkTable(options.networks, options.rpcUrls);
   const schemes = new Map<string, PaymentScheme>();
-  if (signers.some((s) => s.namespace === "eip155")) {
+  const evm = signers.find((s) => s.namespace === "eip155");
+  if (evm !== undefined) {
+    const store = options.channels !== undefined ? channelStore(options.channels) : defaultChannelStore(evm.address);
     schemes.set(
       "eip155",
       new Eip155Scheme({
@@ -214,14 +218,7 @@ function buildContext(options: AssayOptions): ClientContext {
         chain: new ChainReader({ fetch: fetchFn, now, sleep }),
         now,
         dateOffset: () => http.dateOffset,
-        ...(options.channels !== undefined
-          ? {
-              channels: {
-                store: channelStore(options.channels),
-                randomChannelId: () => `0x${randomBytes(32).toString("hex")}` as const,
-              },
-            }
-          : {}),
+        channels: { store, randomChannelId: () => `0x${randomBytes(32).toString("hex")}` as const },
       }),
     );
   }

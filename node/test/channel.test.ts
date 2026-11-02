@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -32,7 +32,8 @@ import {
 } from "../src/core/index.js";
 import { fileChannelStore, memoryChannelStore, PaymentUnsettledLimitError, type ChannelStore } from "../src/index.js";
 import { resetSpendLedger } from "../src/schemes/eip155/index.js";
-import { takeChannelStoreLock } from "../src/channels.js";
+import { defaultChannelStorePath, noFileSystemReason, takeChannelStoreLock } from "../src/channels.js";
+import { Assay, ConfigError, evmSigner } from "../src/index.js";
 import {
   BASE,
   fakeClient,
@@ -44,6 +45,7 @@ import {
   TOOL,
   toolResult,
   type Seen,
+  useFreshHome,
 } from "./fake.js";
 
 const V = load("channel.json");
@@ -425,20 +427,42 @@ const channelSent = (calls: () => Seen[]) =>
 afterEach(() => resetSpendLedger());
 
 describe("client: channel lane", () => {
-  it("offers channel-v1 only with a channel store and a channel-capable network", async () => {
+  it("offers channel-v1 always (the built-in mainnet entry has the door); signs one only on a channel network", async () => {
+    useFreshHome();
     const plain = fakeClient({ mcp: channelTool() });
     await plain.client.tools.call(TOOL, {});
-    expect(plain.calls().every((s) => metaOf(s)["assay/paymentSchemes"] === undefined)).toBe(true);
+    expect(metaOf(plain.calls()[0]!)["assay/paymentSchemes"]).toEqual(["channel-v1", "voucher"]);
     expect(channelSent(plain.calls)).toEqual([]);
 
+    // The built-in mainnet entry has the channel door, so a client with a store offers channel-v1;
+    // on a network whose own entry does not say `channels: true` it still signs per call only.
     const notCapable = channelClient({ channels: false });
     await notCapable.client.tools.call(TOOL, {});
-    expect(notCapable.calls().every((s) => metaOf(s)["assay/paymentSchemes"] === undefined)).toBe(true);
+    expect(metaOf(notCapable.calls()[0]!)["assay/paymentSchemes"]).toEqual(["channel-v1", "voucher"]);
+    expect(channelSent(notCapable.calls)).toEqual([]);
+    expect(notCapable.calls().some((s) => metaOf(s)["assay/voucher"] !== undefined)).toBe(true);
 
     const on = channelClient({});
     await on.client.tools.call(TOOL, {});
     expect(metaOf(on.calls()[0]!)["assay/paymentSchemes"]).toEqual(["channel-v1", "voucher"]);
     expect(channelSent(on.calls)).toHaveLength(1);
+  });
+
+  it("without the channels option keeps lanes in the default file under the home folder (0600)", async () => {
+    const home = useFreshHome();
+    const c = fakeClient({ mcp: channelTool(), options: { networks: CHANNEL_NETWORKS } });
+    await c.client.tools.call(TOOL, {});
+    expect(channelSent(c.calls)).toHaveLength(1);
+    const path = defaultChannelStorePath(KEY.address, home);
+    expect(path.startsWith(home)).toBe(true);
+    expect(
+      path.endsWith(
+        `goassay${process.platform === "win32" ? "\\" : "/"}channels${process.platform === "win32" ? "\\" : "/"}${KEY.address.toLowerCase()}.json`,
+      ),
+    ).toBe(true);
+    const book = JSON.parse(readFileSync(path, "utf8")) as { lanes: unknown[] };
+    expect(book.lanes).toHaveLength(1);
+    if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
   });
 
   it("signs the contract's ChannelVoucher from its own record: price, then total + price", async () => {
@@ -890,5 +914,48 @@ describe("client: channel lanes survive a restart, checked against the chain", (
     writeFileSync(`${path}.lock`, "1"); // pid 1 is always alive
     const store = fileChannelStore(path);
     return expect(store.load()).rejects.toThrow(/another process/);
+  });
+});
+
+describe("default lane store", () => {
+  it("is a per-key file in the platform's config folder", () => {
+    const a = "0x00000000000000000000000000000000000000Ab";
+    expect(defaultChannelStorePath(a, "/home/u", "linux")).toBe(
+      "/home/u/.config/goassay/channels/0x00000000000000000000000000000000000000ab.json",
+    );
+    expect(defaultChannelStorePath(a, "/Users/u", "darwin")).toBe(
+      "/Users/u/Library/Application Support/goassay/channels/0x00000000000000000000000000000000000000ab.json",
+    );
+    expect(defaultChannelStorePath(a, "C:\\Users\\u", "win32")).toBe(
+      "C:\\Users\\u\\AppData\\Roaming\\goassay\\channels\\0x00000000000000000000000000000000000000ab.json",
+    );
+    expect(() => defaultChannelStorePath("not-an-address", "/home/u", "linux")).toThrow(ConfigError);
+  });
+
+  it("names the runtimes without a durable file system", () => {
+    expect(noFileSystemReason()).toBeNull();
+    expect(noFileSystemReason({ navigator: { userAgent: "Cloudflare-Workers" }, process })).toBe("a Cloudflare Worker");
+    expect(noFileSystemReason({ EdgeRuntime: "edge-runtime", process })).toBe("an edge runtime");
+    expect(noFileSystemReason({ window: {}, document: {} })).toBe("a browser");
+    expect(noFileSystemReason({})).not.toBeNull();
+  });
+
+  it("on a Worker, a client with a signer and no channels option is refused at construction; a store is accepted", () => {
+    const nav = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    Object.defineProperty(globalThis, "navigator", { value: { userAgent: "Cloudflare-Workers" }, configurable: true });
+    try {
+      const base = {
+        apiKey: "ak_test",
+        signer: evmSigner(KEY),
+        fetch: (() => Promise.reject(new Error("no"))) as never,
+      };
+      expect(() => new Assay(base)).toThrow(/pass channels: \{ store \}/);
+      expect(() => new Assay({ ...base, channels: { store: memoryChannelStore() } })).not.toThrow();
+      // No signer: nothing is paid, nothing is stored.
+      expect(() => new Assay({ apiKey: "ak_test" })).not.toThrow();
+    } finally {
+      if (nav) Object.defineProperty(globalThis, "navigator", nav);
+      else delete (globalThis as { navigator?: unknown }).navigator;
+    }
   });
 });

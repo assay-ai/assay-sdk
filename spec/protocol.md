@@ -409,7 +409,7 @@ A client conforms to this version when it passes `vectors/eip155/vouchers.json` 
 
 ## 12. Channel vouchers (`channel-v1`, draft)
 
-Status: **draft**, off by default. A client signs channel vouchers only when it was configured with a store for its lanes and its own network table marks the escrow as having the channel door (`channels: true`); none of the built-in networks does yet. Everything in sections 3 to 11 stays as it is: the per-call voucher is still the default and the fallback.
+Status: **draft**. A client signs channel vouchers only when it has a durable store for its lanes and its own network table marks the escrow as having the channel door (`channels: true`). The reference clients do so by default since 1.2.0 (a lane file per signing key under the user's config folder), and their built-in Robinhood Chain mainnet entry (`eip155:4663`) has the door. Everything in sections 3 to 11 stays as it is: the per-call voucher is still the default and the fallback.
 
 ### 12.1 Negotiation
 

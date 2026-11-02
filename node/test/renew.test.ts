@@ -40,6 +40,7 @@ import {
   toolResult,
   WEB,
   type Seen,
+  useFreshHome,
 } from "./fake.js";
 
 const V = load("channel.json");
@@ -653,10 +654,11 @@ describe("client: paidCalls.renewChannelDebts", () => {
     expect(posts(c.seen)).toHaveLength(1);
   });
 
-  it("needs the channels option and a signer", async () => {
+  it("needs a signer; without the channels option the default lane file is used", async () => {
     const s = server();
-    await expect(client(s, { channels: false }).client.paidCalls.renewChannelDebts()).rejects.toBeInstanceOf(
-      ConfigError,
+    useFreshHome();
+    await expect(client(s, { channels: false }).client.paidCalls.renewChannelDebts()).resolves.toEqual(
+      expect.any(Array),
     );
     await expect(
       fakeClient({
@@ -847,12 +849,13 @@ describe("client: a paid call refused for a channel debt", () => {
     expect(posts(c.seen)).toHaveLength(1);
   });
 
-  it("without a lane store nothing is listed or signed", async () => {
+  it("without the channels option a fresh default lane file signs nothing for a debt", async () => {
     const s = server();
+    useFreshHome();
     const c = client(s, { channels: false });
     s.state.owes = true;
     await expect(c.client.tools.call(TOOL, {})).rejects.toMatchObject({ code: "PAYMENT_DEBT_OUTSTANDING" });
-    expect(lists(c.seen)).toEqual([]);
+    expect(posts(c.seen)).toEqual([]);
   });
 
   it("a renew that fails (no debt list) leaves the server's refusal", async () => {

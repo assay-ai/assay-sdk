@@ -1,6 +1,6 @@
 """The Assay SDK: call tools over MCP, with free calls and paid calls signed by a key you hold."""
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 from goassay import errors  # noqa: E402
 from goassay._client import (  # noqa: E402
@@ -14,7 +14,13 @@ from goassay._networks import BUILT_IN_NETWORKS  # noqa: E402
 from goassay._paid_calls import PaidCallsStatus  # noqa: E402
 from goassay._renew import DebtRenewal  # noqa: E402
 from goassay._tools import SearchResult, ToolList, ToolResult  # noqa: E402
-from goassay.channels import ChannelStore, FileChannelStore, MemoryChannelStore  # noqa: E402
+from goassay.channels import (  # noqa: E402
+    ChannelStore,
+    FileChannelStore,
+    MemoryChannelStore,
+    default_channel_store,
+    default_channel_store_path,
+)
 from goassay.errors import (  # noqa: E402
     AssayError,
     AuthError,
@@ -72,6 +78,8 @@ __all__ = [
     "TimeoutError",
     "ToolList",
     "ToolResult",
+    "default_channel_store",
+    "default_channel_store_path",
     "errors",
     "evm_signer",
 ]

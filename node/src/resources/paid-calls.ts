@@ -214,7 +214,7 @@ export class PaidCalls {
     if (signer === null) throw new ConfigError("renewChannelDebts() needs an eip155 signer");
     const scheme = this.#c.schemes.get("eip155");
     const out = scheme?.renewChannelDebts ? await scheme.renewChannelDebts(this.#c.api, signer) : null;
-    if (out === null) throw new ConfigError("renewChannelDebts() needs the channels option (a lane store)");
+    if (out === null) throw new ConfigError("renewChannelDebts() needs a lane store");
     return out;
   }
 

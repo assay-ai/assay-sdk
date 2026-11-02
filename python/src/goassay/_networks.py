@@ -6,7 +6,8 @@ them. Changing an address means a new SDK release.
 
 The built-in table holds the network Assay's production runs on, Robinhood Chain mainnet
 (``eip155:4663``), with two RPC hosts from different operators. A paid call or a bind on a network
-that is not in the table is refused with ``PaymentNetworkUnknownError``.
+that is not in the table is refused with ``PaymentNetworkUnknownError``. The entry says
+``"channels": True``: channel vouchers are signed on it by every client.
 
 ``networks=`` configures any chain from outside (Robinhood Chain testnet for Assay's dev deployment,
 another deployment): its entries are
@@ -35,6 +36,8 @@ BUILT_IN_NETWORKS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
                 "escrow": "eip155:4663:0xe54E0142b1D0d34226498D563A16074C81Bc9A5e",
                 "asset": "eip155:4663/erc20:0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
                 "decimals": 6,
+                # The escrow has the channel door and the backend offers channels on it.
+                "channels": True,
                 "rpcUrls": ["https://rpc.mainnet.chain.robinhood.com", "https://robinhood-rpc.publicnode.com"],
             }
         ),
