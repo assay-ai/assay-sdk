@@ -159,7 +159,7 @@ const assay = new Assay({
 });
 ```
 
-### Channel vouchers (preview)
+### Channel vouchers (on by default)
 
 The client signs one cumulative voucher per lane instead of one voucher per call, so many calls settle in one transaction. Channels are always used when the server offers one on a network whose entry says `channels: true` (the built-in mainnet entry `eip155:4663` does; an entry of your own in `networks` must say it itself). Otherwise a paid call is signed per call, as above.
 
@@ -248,20 +248,20 @@ try {
 
 ## Options
 
-| Option               | Default                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------ |
-| `apiKey`             | `ASSAY_API_KEY`                                                                                  |
-| `mcpUrl`, `apiUrl`   | `https://mcp.goassay.ai/` (a URL or a path; see "Choose a URL"), `https://api.goassay.ai/api/v1` |
-| `signer` / `signers` | none (free calls only)                                                                           |
-| `networks`           | none (needed for paid calls)                                                                     |
-| `limits`             | `{ maxPerCall: "0.50", maxPerDay: "5" }`                                                         |
-| `onPayment`          | none                                                                                             |
-| `channels`           | off (per-call vouchers only); `{ store }` turns on channel vouchers                              |
-| `fetch`              | the global `fetch`                                                                               |
-| `timeoutMs`          | 120 000 per attempt                                                                              |
-| `maxRetries`         | 2, with backoff, honouring `Retry-After`                                                         |
-| `logger`             | silent; never logs keys, headers, bodies or signatures                                           |
-| `now`, `sleep`       | the system clock (corrected by the server's `Date` for vouchers), `setTimeout`                   |
+| Option               | Default                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| `apiKey`             | `ASSAY_API_KEY`                                                                                   |
+| `mcpUrl`, `apiUrl`   | `https://mcp.goassay.ai/` (a URL or a path; see "Choose a URL"), `https://api.goassay.ai/api/v1`  |
+| `signer` / `signers` | none (free calls only)                                                                            |
+| `networks`           | none (needed for paid calls)                                                                      |
+| `limits`             | `{ maxPerCall: "0.50", maxPerDay: "5" }`                                                          |
+| `onPayment`          | none                                                                                              |
+| `channels`           | channels always on; lanes in `defaultChannelStorePath(address)`; `{ store }` keeps them elsewhere |
+| `fetch`              | the global `fetch`                                                                                |
+| `timeoutMs`          | 120 000 per attempt                                                                               |
+| `maxRetries`         | 2, with backoff, honouring `Retry-After`                                                          |
+| `logger`             | silent; never logs keys, headers, bodies or signatures                                            |
+| `now`, `sleep`       | the system clock (corrected by the server's `Date` for vouchers), `setTimeout`                    |
 
 The protocol core (EIP-712 voucher and binding, guards, clock, network tables, `_meta` helpers and server error codes) is at `@goassay-ai/sdk/core`, for tools built on the protocol itself such as `assay-mcp`. The shared test vectors ship in the package: `@goassay-ai/sdk/vectors/eip155/vouchers.json` and the other files of [`vectors/`](https://github.com/assay-ai/assay-sdk/tree/main/vectors).
 

@@ -1,6 +1,15 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   getTypesForEIP712Domain,
   hashDomain,
@@ -463,6 +472,18 @@ describe("client: channel lane", () => {
     const book = JSON.parse(readFileSync(path, "utf8")) as { lanes: unknown[] };
     expect(book.lanes).toHaveLength(1);
     if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it("a second process on the default lane file: the paid call is signed per call, no error", async () => {
+    const home = useFreshHome();
+    const path = defaultChannelStorePath(KEY.address, home);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(`${path}.lock`, "1"); // pid 1 is always alive: another process holds the file
+    const c = fakeClient({ mcp: channelTool(), options: { networks: CHANNEL_NETWORKS } });
+    await c.client.tools.call(TOOL, {});
+    expect(channelSent(c.calls)).toEqual([]);
+    expect(c.calls().some((s) => metaOf(s)["assay/voucher"] !== undefined)).toBe(true);
+    expect(readFileSync(`${path}.lock`, "utf8")).toBe("1");
   });
 
   it("signs the contract's ChannelVoucher from its own record: price, then total + price", async () => {

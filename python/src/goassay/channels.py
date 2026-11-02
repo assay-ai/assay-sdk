@@ -84,7 +84,10 @@ def _alive(pid: int) -> bool:
 
 
 def _in_use() -> ConfigError:
-    return ConfigError("the channel store is in use by another process; give each process its own file")
+    return ConfigError(
+        "the channel store is in use by another process (paid calls are signed per call meanwhile); "
+        "give each process its own file"
+    )
 
 
 def _read(path: Path) -> tuple[int, str] | None:

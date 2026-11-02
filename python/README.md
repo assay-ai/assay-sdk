@@ -156,7 +156,7 @@ assay = Assay(
 )
 ```
 
-### Channel vouchers (preview)
+### Channel vouchers (on by default)
 
 The client signs one cumulative voucher per lane instead of one voucher per call, so many calls settle in one transaction. Channels are always used when the server offers one on a network whose entry says `"channels": True` (the built-in mainnet entry `eip155:4663` does; an entry of your own in `networks=` must say it itself). Otherwise a paid call is signed per call, as above.
 
@@ -248,7 +248,7 @@ A `PaymentRequiredError` carries the server's `hint` (what to do next, for examp
 | `rpc_urls` | the table's public RPC URLs |
 | `networks` | the built-in table; yours are merged over it |
 | `on_payment` | none |
-| `channels` | off (per-call vouchers only); a channel store turns on channel vouchers |
+| `channels` | channels always on; lanes in `default_channel_store_path(address)`; a store keeps them elsewhere |
 | `http_client` | a new `httpx.Client` (`httpx.AsyncClient` for `AsyncAssay`) |
 | `timeout` | 120 s per attempt (httpx applies it to each of connect, read, write and pool) |
 | `max_retries` | 2, with backoff, honouring `Retry-After` |

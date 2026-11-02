@@ -34,6 +34,7 @@ from goassay.channels import default_channel_store, default_channel_store_path, 
 from goassay.errors import AssayError, ConfigError, PaymentError, PaymentRefusedError
 
 from .fake import (
+    ACCOUNT,
     BASE,
     NETWORKS,
     NOW,
@@ -730,6 +731,20 @@ def test_default_lane_file_under_the_home_folder(fresh_home: Path) -> None:
     assert len(json.loads(path.read_text())["lanes"]) == 1
     if sys.platform != "win32":
         assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="no liveness probe on Windows: every lock counts as held")
+def test_second_process_on_the_default_lane_file_pays_per_call(fresh_home: Path) -> None:
+    fake = Fake(mcp=channel_tool())
+    client = fake.client(networks=CHANNEL_NETWORKS)
+    path = default_channel_store_path(ACCOUNT.address)
+    path.parent.mkdir(parents=True)
+    lock = path.with_name(path.name + ".lock")
+    lock.write_text("1")  # pid 1 is always alive: another process holds the file
+    client.tools.call(TOOL, {})
+    assert sent(fake) == []
+    assert any("assay/voucher" in meta_of(s) for s in fake.calls())
+    assert lock.read_text() == "1"
 
 
 def test_default_lane_path_per_platform() -> None:

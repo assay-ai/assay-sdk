@@ -91,7 +91,10 @@ function alive(pid: number): boolean {
   }
 }
 
-const inUse = () => new ConfigError("the channel store is in use by another process; give each process its own file");
+const inUse = () =>
+  new ConfigError(
+    "the channel store is in use by another process (paid calls are signed per call meanwhile); give each process its own file",
+  );
 
 /**
  * Takes `<path>.lock` for this process, or throws `ConfigError` when another live process holds it.
