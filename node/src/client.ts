@@ -12,7 +12,14 @@ import { QuoteCache, type ClientContext, type OnPayment } from "./resources/cont
 import { Receipts } from "./resources/receipts.js";
 import { Tools } from "./resources/tools.js";
 import { RestClient } from "./rest.js";
-import { checkLimits, DEFAULT_LIMITS, Eip155Scheme, type Eip155Network, type Limits } from "./schemes/eip155/index.js";
+import {
+  checkLimits,
+  checkProviders,
+  DEFAULT_LIMITS,
+  Eip155Scheme,
+  type Eip155Network,
+  type Limits,
+} from "./schemes/eip155/index.js";
 import type { NetworkEntry } from "./schemes/eip155/index.js";
 import type { PaymentScheme } from "./schemes/types.js";
 import { signerNamespace, type Signer } from "./signer.js";
@@ -55,6 +62,12 @@ export interface AssayOptions {
    * process. Default `{maxPerCall: "0.50", maxPerDay: "5"}` (rolling 24 hours).
    */
   limits?: Limits;
+  /**
+   * Provider allow-list (G8): only vouchers that pay one of these provider payout addresses are
+   * signed (bare `0x…` or CAIP-10 `eip155:<chainId>:0x…`). Default: any staked provider the API
+   * picks. Funds still go only to the pinned escrow either way.
+   */
+  providers?: string[];
   /** Called before each voucher is signed, after every local check passed. Return `false` to refuse. */
   onPayment?: OnPayment;
   /**
@@ -214,6 +227,7 @@ function buildContext(options: AssayOptions): ClientContext {
       new Eip155Scheme({
         networks,
         limits: checkLimits(options.limits ?? DEFAULT_LIMITS),
+        providers: checkProviders(options.providers),
         // Chain reads go to the caller's RPCs, without the API key.
         chain: new ChainReader({ fetch: fetchFn, now, sleep }),
         now,

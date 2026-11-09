@@ -119,7 +119,9 @@ With a signer, every voucher is checked against local limits before it is signed
 - Change them with `limits={"max_per_call": ..., "max_per_day": ...}` (dollars, as strings). The keys are snake_case in Python; the Node SDK spells them `maxPerCall` and `maxPerDay`.
 - The record is in memory, per process, and safe across threads: a restart starts again at zero, and several processes each have their own. The on-chain caps that the payer set when approving the key bound it across processes.
 
-`on_payment(details)` sees each payment (tool, network, amount, provider, payer, idempotency key) after every check passed and before it is signed. Use it for your own rules, for example an allow-list of providers:
+`providers=[...]` is a built-in provider allow-list (guard G8): only vouchers that pay one of these provider payout addresses (`0x…` or `eip155:<chainId>:0x…`) are signed, and any other payment is refused before signing. By default any staked provider the API picks is allowed; funds still go only to the pinned escrow.
+
+`on_payment(details)` sees each payment (tool, network, amount, provider, payer, idempotency key) after every check passed and before it is signed. Use it for your own rules, for example a confirmation above an amount, or an allow-list of providers:
 
 ```python
 allowed = {"eip155:<chainId>:<provider address>"}
@@ -247,6 +249,7 @@ A `PaymentRequiredError` carries the server's `hint` (what to do next, for examp
 | `limits` | `{"max_per_call": "0.50", "max_per_day": "5"}` |
 | `rpc_urls` | the table's public RPC URLs |
 | `networks` | the built-in table; yours are merged over it |
+| `providers` | none (any staked provider) |
 | `on_payment` | none |
 | `channels` | channels always on; lanes in `default_channel_store_path(address)`; a store keeps them elsewhere |
 | `http_client` | a new `httpx.Client` (`httpx.AsyncClient` for `AsyncAssay`) |

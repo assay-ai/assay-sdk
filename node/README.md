@@ -122,7 +122,9 @@ With a signer, every voucher is checked against local limits before it is signed
 - Change them with `limits: { maxPerCall, maxPerDay }` (dollars, as strings). The keys are camelCase in Node; the Python SDK spells them `max_per_call` and `max_per_day`.
 - The record is in memory, per process: a restart starts again at zero, and worker threads or several processes each have their own. The on-chain caps that the payer set when approving the key bound it across processes.
 
-`onPayment(details)` sees each payment (tool, network, amount, provider, payer, idempotency key) after every check passed and before it is signed. Use it for your own rules, for example an allow-list of providers:
+`providers: [...]` is a built-in provider allow-list (guard G8): only vouchers that pay one of these provider payout addresses (`0x…` or `eip155:<chainId>:0x…`) are signed, and any other payment is refused before signing. By default any staked provider the API picks is allowed; funds still go only to the pinned escrow.
+
+`onPayment(details)` sees each payment (tool, network, amount, provider, payer, idempotency key) after every check passed and before it is signed. Use it for your own rules, for example a confirmation above an amount, or an allow-list of providers:
 
 ```ts
 const allowed = new Set(["eip155:<chainId>:<provider address>"]);
@@ -255,6 +257,7 @@ try {
 | `signer` / `signers` | none (free calls only)                                                                            |
 | `networks`           | none (needed for paid calls)                                                                      |
 | `limits`             | `{ maxPerCall: "0.50", maxPerDay: "5" }`                                                          |
+| `providers`          | none (any staked provider)                                                                        |
 | `onPayment`          | none                                                                                              |
 | `channels`           | channels always on; lanes in `defaultChannelStorePath(address)`; `{ store }` keeps them elsewhere |
 | `fetch`              | the global `fetch`                                                                                |

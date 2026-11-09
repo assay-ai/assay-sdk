@@ -275,6 +275,31 @@ describe("paid call", () => {
     expect(calls()).toHaveLength(1);
   });
 
+  it("providers: a provider outside the allow-list is refused by G8 before signing", async () => {
+    const other = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
+    const { client, signTypedData } = fakeClient({ mcp: paidTool(), options: { providers: [other] } });
+    const err = await client.tools.call(TOOL, {}).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PaymentRefusedError);
+    expect((err as PaymentRefusedError).guard).toBe("G8");
+    expect(signTypedData).not.toHaveBeenCalled();
+  });
+
+  it("providers: a listed provider (CAIP-10) is paid", async () => {
+    const { client, signTypedData } = fakeClient({
+      mcp: paidTool(),
+      options: { providers: [BASE.requirement.provider] },
+    });
+    await client.tools.call(TOOL, {});
+    expect(signTypedData).toHaveBeenCalled();
+  });
+
+  it.each([[[]], [["not-an-address"]], [["eip155:0:0x90F79bf6EB2c4f870365E785982E1f101E93b906"]]])(
+    "providers %j is a ConfigError",
+    (providers) => {
+      expect(() => fakeClient({ mcp: paidTool(), options: { providers } })).toThrow(ConfigError);
+    },
+  );
+
   /** guards.json cases that change only the requirement and are refused by a guard the client's own context does not decide. */
   const requirementCases = (
     GUARDS.cases as {
