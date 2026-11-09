@@ -154,6 +154,23 @@ export function checkLimits(limits: Limits): Limits {
   return Object.freeze({ maxPerCall: limits.maxPerCall, maxPerDay: limits.maxPerDay });
 }
 
+const PROVIDER_ACCOUNT = /^(?:eip155:[1-9][0-9]*:)?0x[0-9a-fA-F]{40}$/;
+
+/**
+ * The provider allow-list (G8): provider payout addresses, bare `0x…` or CAIP-10
+ * `eip155:<chainId>:0x…`. `undefined` (the default) allows any staked provider.
+ */
+export function checkProviders(providers: readonly string[] | undefined): readonly string[] | null {
+  if (providers === undefined) return null;
+  if (!Array.isArray(providers) || providers.length === 0)
+    throw new ConfigError("providers must list at least one provider address");
+  for (const p of providers) {
+    if (typeof p !== "string" || !PROVIDER_ACCOUNT.test(p))
+      throw new ConfigError(`providers: ${JSON.stringify(p)} is not an address or an eip155 CAIP-10 account`);
+  }
+  return Object.freeze([...providers]);
+}
+
 function deepFreeze<T>(value: T): T {
   if (typeof value === "object" && value !== null) {
     for (const v of Object.values(value)) deepFreeze(v);
@@ -272,6 +289,8 @@ export interface Eip155SchemeOptions {
   /** The network table: built into the SDK, or the caller's for non-production environments. */
   networks: ReadonlyMap<string, NetworkEntry>;
   limits: Limits;
+  /** The provider allow-list (G8), checked with {@link checkProviders}. Default: any provider. */
+  providers?: readonly string[] | null;
   chain: ChainReader;
   /** Milliseconds clock. */
   now: () => number;
@@ -567,8 +586,9 @@ export class Eip155Scheme implements PaymentScheme {
       limits: {
         perCall: this.o.limits.maxPerCall,
         perDay: this.o.limits.maxPerDay,
+        // Above a threshold, `onPayment` is the confirmation hook, so G7's own one stays off.
         confirmAbove: null,
-        providers: null,
+        providers: this.o.providers ? [...this.o.providers] : null,
       },
       signed,
       confirmation: null,

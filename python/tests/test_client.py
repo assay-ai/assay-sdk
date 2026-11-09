@@ -241,6 +241,28 @@ def test_on_payment_refusal_signs_nothing() -> None:
     assert fake.signer.calls == 0 and len(fake.calls()) == 1
 
 
+def test_providers_allow_list_refuses_another_provider() -> None:
+    fake = Fake(mcp=paid_tool())
+    with pytest.raises(PaymentRefusedError) as err:
+        fake.client(providers=["0x90F79bf6EB2c4f870365E785982E1f101E93b906"]).tools.call(TOOL, {})
+    assert err.value.guard == "G8"
+    assert fake.signer.calls == 0
+
+
+def test_providers_allow_list_pays_a_listed_provider() -> None:
+    fake = Fake(mcp=paid_tool())
+    fake.client(providers=[BASE["requirement"]["provider"]]).tools.call(TOOL, {})
+    assert fake.signer.calls == 1
+
+
+@pytest.mark.parametrize(
+    "providers", [[], "0x90F79bf6EB2c4f870365E785982E1f101E93b906", ["nope"], ["eip155:0:0x" + "1" * 40]]
+)
+def test_providers_config_errors(providers: Any) -> None:
+    with pytest.raises(ConfigError):
+        Fake(mcp=paid_tool()).client(providers=providers)
+
+
 REQUIREMENT_CASES = [
     c
     for c in GUARDS["cases"]
