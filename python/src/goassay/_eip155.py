@@ -11,7 +11,7 @@ import copy
 import math
 import re
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -100,6 +100,22 @@ def eip155_networks(
             raise fail(f"networks[{nid!r}].channels must be a boolean")
         out[nid] = NetworkEntry(nid, chain_id, escrow[1], n["escrow"], n["asset"], decimals, tuple(rpc), channels)
     return out
+
+
+_PROVIDER_ACCOUNT = re.compile(r"(?:eip155:[1-9][0-9]*:)?0x[0-9a-fA-F]{40}")
+
+
+def check_providers(providers: Sequence[str] | None) -> tuple[str, ...] | None:
+    """The provider allow-list (G8): provider payout addresses, bare ``0x…`` or CAIP-10
+    ``eip155:<chainId>:0x…``. ``None`` (the default) allows any staked provider."""
+    if providers is None:
+        return None
+    if isinstance(providers, str) or not isinstance(providers, Sequence) or len(providers) == 0:
+        raise ConfigError("providers must list at least one provider address")
+    for p in providers:
+        if not isinstance(p, str) or not _PROVIDER_ACCOUNT.fullmatch(p):
+            raise ConfigError(f"providers: {p!r} is not an address or an eip155 CAIP-10 account")
+    return tuple(providers)
 
 
 def check_limits(limits: Mapping[str, str]) -> dict[str, str]:
@@ -276,6 +292,7 @@ class Eip155Scheme:
         networks: Mapping[str, NetworkEntry],
         limits: Mapping[str, str],
         chain: ChainReader,
+        providers: tuple[str, ...] | None = None,
         now: Callable[[], float],
         date_offset: Callable[[], int],
         channel_store: Any = None,
@@ -283,6 +300,7 @@ class Eip155Scheme:
     ) -> None:
         self.networks = networks
         self.limits = limits
+        self.providers = providers
         self.chain = chain
         self.now = now
         self.date_offset = date_offset
@@ -536,8 +554,9 @@ class Eip155Scheme:
             "limits": {
                 "perCall": self.limits["max_per_call"],
                 "perDay": self.limits["max_per_day"],
+                # Above a threshold, ``on_payment`` is the confirmation hook, so G7's own one stays off.
                 "confirmAbove": None,
-                "providers": None,
+                "providers": list(self.providers) if self.providers is not None else None,
             },
             "signed": signed,
             "confirmation": None,

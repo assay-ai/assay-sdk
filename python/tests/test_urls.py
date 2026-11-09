@@ -283,7 +283,7 @@ def test_link_tokens_are_redacted_in_repr_and_logs() -> None:
     direct = Fake().client(mcp_url=f"{ORIGIN}/u/{TOKEN}")
     asyncs = Fake().async_client().at(f"/u/{TOKEN}")
     for c in (shared, direct, asyncs):
-        for text in (repr(c), str(c), f"{c!r}"):
+        for text in (repr(c), str(c), f"{c!r}", repr(c._ctx), str(c._ctx)):
             assert TOKEN not in text
             assert "/u/…" in text
     assert repr(shared) == f"Assay({ORIGIN}/u/…@2?tools=get_weather)"

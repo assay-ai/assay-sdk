@@ -16,7 +16,7 @@ import httpx
 
 from goassay._chain import ChainReader
 from goassay._context import Context
-from goassay._eip155 import DEFAULT_LIMITS, Eip155Scheme, check_limits
+from goassay._eip155 import DEFAULT_LIMITS, Eip155Scheme, check_limits, check_providers
 from goassay._http import HttpConfig, Logger, origin_of
 from goassay._mcp_url import DEFAULT_MCP_ORIGIN, redact_mcp_url, resolve_mcp_url
 from goassay._networks import network_table
@@ -59,6 +59,7 @@ def _build_context(
     networks: Mapping[str, Mapping[str, Any]] | None,
     rpc_urls: Mapping[str, list[str]] | None,
     limits: Mapping[str, str] | None,
+    providers: Sequence[str] | None,
     on_payment: Callable[[dict[str, Any]], Any] | None,
     channels: ChannelStore | None,
     timeout: float,
@@ -117,6 +118,7 @@ def _build_context(
         ctx.schemes["eip155"] = Eip155Scheme(
             networks=table,
             limits=check_limits(limits or DEFAULT_LIMITS),
+            providers=check_providers(providers),
             chain=ChainReader(now),
             now=now,
             date_offset=lambda: http.date_offset,
@@ -170,6 +172,9 @@ class Assay(_Base):
     rolling 24 hours. ``networks=`` configures payment networks (chainId, escrow, asset, decimals,
     rpcUrls), merged over the SDK's built-in table: a new network is added, and an entry for a
     built-in network replaces it whole. ``rpc_urls=`` sets your own RPC URLs for a network.
+    ``providers=`` is a provider allow-list (G8): only vouchers that pay one of these provider
+    payout addresses (``0x…`` or ``eip155:<chainId>:0x…``) are signed; by default any staked
+    provider the API picks is allowed (funds still go only to the pinned escrow).
 
     Channel vouchers (``channel-v1``, one cumulative voucher per lane instead of one per call) are
     always used on networks whose entry says ``"channels": True`` (the built-in mainnet entry does)
@@ -193,6 +198,7 @@ class Assay(_Base):
         networks: Mapping[str, Mapping[str, Any]] | None = None,
         rpc_urls: Mapping[str, list[str]] | None = None,
         limits: Mapping[str, str] | None = None,
+        providers: Sequence[str] | None = None,
         on_payment: Callable[[dict[str, Any]], bool | None] | None = None,
         channels: ChannelStore | None = None,
         http_client: httpx.Client | None = None,
@@ -212,6 +218,7 @@ class Assay(_Base):
             networks=networks,
             rpc_urls=rpc_urls,
             limits=limits,
+            providers=providers,
             on_payment=on_payment,
             channels=channels,
             timeout=timeout,
@@ -305,6 +312,7 @@ class AsyncAssay(_Base):
         networks: Mapping[str, Mapping[str, Any]] | None = None,
         rpc_urls: Mapping[str, list[str]] | None = None,
         limits: Mapping[str, str] | None = None,
+        providers: Sequence[str] | None = None,
         on_payment: Callable[[dict[str, Any]], bool | None | Awaitable[bool | None]] | None = None,
         channels: ChannelStore | None = None,
         http_client: httpx.AsyncClient | None = None,
@@ -324,6 +332,7 @@ class AsyncAssay(_Base):
             networks=networks,
             rpc_urls=rpc_urls,
             limits=limits,
+            providers=providers,
             on_payment=on_payment,
             channels=channels,
             timeout=timeout,

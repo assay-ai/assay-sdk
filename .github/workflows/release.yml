@@ -64,13 +64,17 @@ jobs:
         run: npm publish --access public --provenance
         working-directory: node
 
-  pypi:
+  # Python: three jobs so that no unpinned package ever runs where a publish credential can be
+  # minted, and the dist is built only by hash-pinned tools (same shape as assay-mcp).
+  #   pypi-test:  no id-token. Checks the tag, installs the dev extras, runs the full gate.
+  #   pypi-build: no id-token. Installs only python/requirements-release.txt (--require-hashes),
+  #               builds without isolation, uploads the dist with its digest.
+  #   pypi:       environment "pypi" + id-token. Verifies the digest and publishes.
+  pypi-test:
     if: startsWith(github.ref_name, 'python/v')
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       contents: read
-      id-token: write # PyPI trusted publishing
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -86,15 +90,70 @@ jobs:
           echo "tag=$tag pyproject.toml=$pkg __version__=$src"
           test "$tag" = "$pkg" && test "$tag" = "$src"
         working-directory: python
-      - run: pip install -e '.[dev]' build==1.6.1 twine==7.0.0
+      - run: pip install -e '.[dev]'
         working-directory: python
       - run: ruff check . && ruff format --check . && mypy && pytest
         working-directory: python
-      - run: python -m build
+
+  pypi-build:
+    needs: pypi-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha256: ${{ steps.dist.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - run: pip install --require-hashes --only-binary ':all:' -r requirements-release.txt
+        working-directory: python
+      - run: python -m build --no-isolation --outdir "$GITHUB_WORKSPACE/out" .
         working-directory: python
       - name: Check the built distributions
-        run: twine check --strict dist/*
-        working-directory: python
+        run: twine check --strict out/*
+      - name: Digest of the distributions
+        id: dist
+        run: |
+          set -euo pipefail
+          (cd out && sha256sum * > ../SHA256SUMS)
+          # The digest also travels as a job output, outside the artifact, so a swapped artifact
+          # cannot carry a matching checksum file.
+          echo "sha256=$(sha256sum SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          mv SHA256SUMS out/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  pypi:
+    needs: pypi-build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: out
+      - name: Verify the distribution checksums
+        working-directory: out
+        env:
+          SHA256: ${{ needs.pypi-build.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "Missing build digest."; exit 1; }
+          echo "$SHA256  SHA256SUMS" | sha256sum --check --strict
+          sha256sum --check --strict SHA256SUMS
+          rm SHA256SUMS
+          if ls | grep -qvE '^goassay-[0-9]+\.[0-9]+\.[0-9]+(-py3-none-any\.whl|\.tar\.gz)$'; then echo "Unexpected file in dist."; exit 1; fi
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
-          packages-dir: python/dist
+          packages-dir: out

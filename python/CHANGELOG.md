@@ -2,6 +2,16 @@
 
 All notable changes to `goassay` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
+## Unreleased
+
+### Added
+
+- `providers=` option: a provider allow-list (guard G8). Only vouchers that pay one of the listed provider payout addresses are signed. Default unchanged: any staked provider.
+
+### Fixed
+
+- The internal client context no longer prints the MCP URL's link token (`/u/{token}`) in its `repr`, for example in tracebacks that capture local variables.
+
 ## 1.2.0 - 2026-11-02
 
 Channels are now used by default; a lane file is created at `~/Library/Application Support/goassay/channels/<address>.json` (macOS), `~/.config/goassay/channels/<address>.json` (Linux and other systems) or `%USERPROFILE%\AppData\Roaming\goassay\channels\<address>.json` (Windows), one file per signing key (`<address>` in lower case, mode 0600, with a `.lock` file next to it). The same file and lock are used by the Node and Python clients.

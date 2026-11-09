@@ -8,6 +8,7 @@ from typing import Any
 from goassay import _wire
 from goassay._eip155 import Eip155Scheme, NetworkEntry
 from goassay._http import HttpConfig
+from goassay._mcp_url import redact_mcp_url
 from goassay._ops import Flow
 from goassay.signers import EvmSigner
 
@@ -36,9 +37,12 @@ class QuoteCache:
         return dict(e[0])
 
 
-@dataclass
+@dataclass(repr=False)
 class Context:
-    """What every resource module shares. One resource area = one module that takes this."""
+    """What every resource module shares. One resource area = one module that takes this.
+
+    ``mcp_url`` can carry a link-only ``/u/{token}`` secret, so repr/str mask it (tracebacks
+    that capture locals print this object)."""
 
     http: HttpConfig = field(repr=False)
     mcp_url: str
@@ -54,6 +58,9 @@ class Context:
 
     def __post_init__(self) -> None:
         self.quotes = QuoteCache(self.now)
+
+    def __repr__(self) -> str:
+        return f"Context(mcp_url={redact_mcp_url(self.mcp_url)!r}, api_url={self.api_url!r})"
 
     def mcp(self, method: str, params: dict[str, Any]) -> Flow[dict[str, Any]]:
         return _wire.mcp_request(self.http, self.mcp_url, method, params)
