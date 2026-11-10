@@ -2,7 +2,7 @@
 
 All notable changes to `@goassay-ai/sdk` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/); before 1.0 a minor version may change the API.
 
-## Unreleased
+## 1.3.0 - 2026-11-10
 
 ### Added
 
